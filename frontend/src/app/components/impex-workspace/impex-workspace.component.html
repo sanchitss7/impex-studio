@@ -1,0 +1,275 @@
+<div class="app-workspace-bg">
+
+    <nav class="navbar navbar-dark bg-dark px-4 shadow-sm">
+        <a class="navbar-brand fw-bold" href="#">
+            <i class="bi bi-gear-fill me-2 text-primary"></i>Hybris Impex Automation Tool
+        </a>
+
+        <div class="d-flex align-items-center text-white-50 gap-3">
+            <span class="cursor-pointer"><i class="bi bi-person-circle me-1"></i> Admin</span>
+            <span class="cursor-pointer"><i class="bi bi-sliders me-1"></i> Settings</span>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 mt-4">
+        <ul class="nav nav-pills gap-2 bg-white p-2 rounded border shadow-sm">
+
+            <li class="nav-item">
+                <button class="nav-link fw-semibold px-4" [class.active]="activeWorkspaceMode === 'bulk'"
+                    (click)="activeWorkspaceMode = 'bulk'">
+                    <i class="bi bi-table me-2"></i>Bulk Spreadsheet View
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-semibold px-4" [class.active]="activeWorkspaceMode === 'single'"
+                    (click)="activeWorkspaceMode = 'single'">
+                    <i class="bi bi-file-earmark-text me-2"></i>Single Component Form
+                </button>
+            </li>
+            <!-- <li class="nav-item">
+                <button class="nav-link fw-semibold px-4" [class.active]="activeWorkspaceMode === 'bulk-generator'"
+                    (click)="activeWorkspaceMode = 'bulk-generator'">
+                    <i class="bi bi-gear-wide-connected me-2"></i>Bulk Impex Generator
+                </button>
+            </li> -->
+        </ul>
+    </div>
+
+    <ng-container *ngIf="activeWorkspaceMode === 'bulk'">
+        <div class="container-fluid px-4 mt-3">
+            <div
+                class="d-flex flex-wrap justify-content-between align-items-center bg-white p-3 rounded border shadow-sm gap-3">
+
+                <div class="d-flex gap-3 align-items-center">
+                    <label class="btn btn-success fw-bold px-3 py-2" for="excel-uploader">
+                        <i class="bi bi-file-earmark-excel me-2"></i>Upload Bulk Spreadsheet
+                    </label>
+                    <input type="file" id="excel-uploader" accept=".xlsx, .xls, .csv" (change)="onFileSelected($event)"
+                        class="hidden-file-input" />
+
+                    <select [(ngModel)]="selectedLanguage"
+                        class="form-select border-secondary-subtle fw-semibold lang-dropdown">
+                        <option *ngFor="let lang of languagesList" [value]="lang">
+                            🌍 {{ lang }} Variant View
+                        </option>
+                    </select>
+                    <button class="btn btn-primary fw-bold px-4" (click)="translateSelectedRows()"
+                        [disabled]="!hasSelectedRows()">
+                        Translate Selected
+                    </button>
+                </div>
+
+                <div class="d-flex gap-2">
+
+                    <div class="d-flex justify-content-end mb-3">
+                        <button class="btn btn-outline-secondary fw-semibold px-3 me-3">
+                            <i class="bi bi-download me-2"></i>EXPORT JSON
+                        </button>
+                      
+                        <button (click)="generateAndOpenModal()" class="btn btn-primary">
+                            Generate & Review
+                        </button>
+                        
+                        <div class="modal-overlay" *ngIf="showModal">
+                            <div class="modal-content full-screen-modal">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">ImpEx Editor</h5>
+                                    <button type="button" class="close" (click)="showModal = false">&times;</button>
+                                </div>
+
+                                <div class="modal-body editor-layout">
+                                    <div class="editor-side" style="width: 100%;">
+                                        <textarea id="impex-review" [ngModel]="manualImpexContent"
+                                            (ngModelChange)="manualImpexContent = $event" class="form-control"
+                                            style="font-family: monospace; height: 100%; resize: none;">
+                </textarea>
+                                    </div>
+
+                                </div>
+                                <div class="modal-footer d-flex justify-content-between">
+                                    <div class="toolbar">
+                                        <button (click)="fixImpExSyntax()" class="btn btn-primary">Fix Syntax
+                                            Errors</button>
+                                    </div>
+
+                                    <div class="download_imp">
+                                        <button class="btn btn-success fw-bold" (click)="downloadManualImpex()">
+                                            <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .impex File
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="card mt-4 shadow-sm border border-secondary-subtle">
+                <div class="card-header bg-white py-3">
+                    <h5 class="card-title mb-0 fw-bold text-secondary">Impex Content Manager</h5>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+
+                        <table class="table table-hover align-middle mb-0 text-nowrap">
+                            <thead
+                                class="table-light border-bottom border-secondary-subtle text-uppercase font-monospace fs-7">
+                                <tr>
+                                    <th scope="col" class="text-center checkbox-column-width">
+                                        <input type="checkbox" class="form-check-input"
+                                            [(ngModel)]="masterCheckboxState" (change)="toggleAllRows()" />
+                                    </th>
+                                    <th scope="col" style="width:20%">Component UID</th>
+                                    <th scope="col">Content [lang={{selectedLanguage}}]</th>
+                                    <th scope="col" class="text-center actions-column-width">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr *ngFor="let row of bannerGridData; let i = index">
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input" [(ngModel)]="row.selected"
+                                            (change)="checkRowParity()" />
+                                    </td>
+                                    <td style="width:20%">
+                                        <input type="text" class="form-control font-monospace fw-bold w-100"
+                                            [(ngModel)]="row.component_Id" />
+                                    </td>
+                                    <td>
+                                        <textarea class="form-control" [(ngModel)]="row.content" rows="4"></textarea>
+                                    </td>
+                                    <td class="text-center text-secondary fs-5">
+                                        <i class="bi bi-trash cursor-pointer text-danger" (click)="deleteRow(i)"></i>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- <table class="table table-hover align-middle mb-0 text-nowrap">
+                            <thead
+                                class="table-light border-bottom border-secondary-subtle text-uppercase font-monospace fs-7">
+                                <tr>
+                                    <th scope="col" class="text-center checkbox-column-width">
+                                        <input type="checkbox" class="form-check-input"
+                                            [(ngModel)]="masterCheckboxState" (change)="toggleAllRows()" />
+                                    </th>
+                                    <th scope="col">Component UID<span
+                                        class="d-block text-muted text-lowercase font-sans fs-8">Unique ID</span>
+                                    </th>
+                                    <th scope="col">content<span
+                                            class="d-block text-muted text-lowercase font-sans fs-8">Unique ID</span>
+                                    </th>
+                                    <th scope="col">Content [lang={{selectedLanguage.toLowerCase()}}]</th>
+                                    <th scope="col" class="text-center actions-column-width">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr *ngFor="let row of bannerGridData">
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input" [(ngModel)]="row.selected"
+                                            (change)="checkRowParity()" />
+                                    </td>
+                                    <td class="font-monospace fw-bold text-dark">{{ row.component_Id }}</td>
+                                    <td>{{ row.content }}</td>
+                                    <td>{{ row.description }}</td>
+                                    <td class="text-center text-secondary fs-5">
+                                        <i class="bi bi-pencil-square me-2 cursor-pointer text-primary"></i>
+                                        <i class="bi bi-trash cursor-pointer text-danger"></i>
+                                    </td>
+                                </tr>
+                                <tr *ngIf="bannerGridData.length === 0">
+                                    <td colspan="5" class="text-center py-5 text-muted fst-italic">
+                                        <i
+                                            class="bi bi-cloud-arrow-up display-6 d-block mb-3 text-secondary-subtle"></i>
+                                        No components loaded yet. Click "Create New Banner" above to import an Excel
+                                        spreadsheet configuration matrix template.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table> -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ng-container>
+
+    <ng-container *ngIf="activeWorkspaceMode === 'single'">
+        <div class="container-fluid px-4 mt-3">
+            <div class="card shadow-sm border border-secondary-subtle p-4 bg-white">
+                <h3 class="fw-bold text-dark mb-1">Impex Studio Engine Form</h3>
+                <p class="text-muted small">Process individual component configurations directly into specialized
+                    language formats.</p>
+                <hr class="text-muted my-3" />
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <h5 class="fw-bold mb-3 text-secondary">Configuration Workspace</h5>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Impex Header Syntax:</label>
+                            <input type="text" [(ngModel)]="headerConfig"
+                                class="form-control font-monospace border-secondary-subtle" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Component Target UID:</label>
+                            <input type="text" [(ngModel)]="uid"
+                                class="form-control font-monospace border-secondary-subtle" />
+                        </div>
+
+                        <h6 class="fw-bold mt-4 mb-3 text-secondary">Localization Packages</h6>
+                        <div *ngFor="let lang of languages" class="card p-3 mb-3 border-secondary-subtle bg-light">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-secondary text-uppercase py-2 px-3 fs-7">Language Variant: {{ lang
+                                    }}</span>
+                                <button *ngIf="lang === 'en'" (click)="autoPopulateTranslations()"
+                                    class="btn btn-sm btn-primary fw-bold">
+                                    <i class="bi bi-lightning-fill me-1"></i>Auto-Translate to All Target Languages
+                                </button>
+                            </div>
+                            <textarea rows="2" [(ngModel)]="contentMap[lang]"
+                                class="form-control font-monospace border-secondary-subtle"></textarea>
+                        </div>
+
+                        <button class="btn btn-primary fw-bold px-4 py-2 mt-2" (click)="processImpex()">
+                            <i class="bi bi-cpu-fill me-2"></i>Compile & Standardize Impex
+                        </button>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <h5 class="fw-bold mb-3 text-secondary">Compiled Output Stream</h5>
+                        <div class="mb-3 d-flex gap-2">
+                            <button [disabled]="!outputResult" class="btn btn-outline-dark fw-semibold"
+                                (click)="copyToClipboard()">
+                                <i class="bi bi-clipboard-check me-2"></i>Copy Component Output
+                            </button>
+                            <button [disabled]="!outputResult" class="btn btn-success fw-bold"
+                                (click)="downloadImpexFile()">
+                                <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .impex File
+                            </button>
+                        </div>
+                        <pre class="bg-dark text-light p-3 rounded border shadow-sm font-monospace position-relative terminal-viewport"><code>{{ outputResult || 'No generated code block compiled yet.' }}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ng-container>
+    <ng-container *ngIf="activeWorkspaceMode === 'bulk-generator'">
+        <div class="container-fluid px-4 mt-3">
+            <div class="card shadow-sm border border-secondary-subtle p-4 bg-white">
+                <app-bulk-generator></app-bulk-generator>
+            </div>
+        </div>
+    </ng-container>
+
+
+    <footer
+        class="bg-secondary-subtle border-top border-secondary-subtle position-fixed bottom-0 start-0 end-0 px-4 py-2 d-flex justify-content-between text-muted master-system-status-bar">
+        <div><i class="bi bi-hdd-network-fill text-success me-1"></i> {{ backendConnectionStatus }}</div>
+        <div><i class="bi bi-file-earmark-check-fill text-primary me-1"></i> {{ lastGeneratedFileLog }}</div>
+    </footer>
+</div>

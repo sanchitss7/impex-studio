@@ -1,0 +1,28 @@
+<div class="container mt-4">
+  <h2>Bulk Impex Generator</h2>
+  
+  <div class="upload-section my-3">
+    <input type="file" (change)="onFileSelected($event)" accept=".xlsx, .csv" class="form-control">
+  </div>
+
+  <table class="table table-striped table-bordered" *ngIf="gridData.length > 0">
+    <thead>
+      <tr>
+        <th>Code</th>
+        <th>content</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let row of gridData">
+        <td><input [(ngModel)]="row.component_Id" class="form-control"></td>
+        <td><input [(ngModel)]="row.content" class="form-control"></td>
+        <td><input [(ngModel)]="row.description" class="form-control"></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <button class="btn btn-primary" (click)="generateAndDownload()" [disabled]="gridData.length === 0">
+    Generate & Download ImpEx
+  </button>
+</div>

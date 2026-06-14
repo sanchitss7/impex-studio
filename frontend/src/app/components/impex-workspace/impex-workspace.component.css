@@ -1,0 +1,192 @@
+/* ==========================================================================
+   1. CORE APP CANVAS & WRAPPER ELEMENTS
+   ========================================================================== */
+.app-workspace-bg {
+  background-color: #f4f6f9;
+  min-height: 100vh;
+  padding-bottom: 60px;
+  /* Leaves clear breathing space above fixed status footer */
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   2. FILTER TOOLBARS & FORM LAYOUT INPUT CONTROLS
+   ========================================================================== */
+.hidden-file-input {
+  display: none;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.terminal-viewport {
+  height: 450px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 0.85rem;
+}
+
+.checkbox-column-width {
+  width: 50px;
+}
+
+.actions-column-width {
+  width: 100px;
+}
+
+.lang-dropdown {
+  width: 200px;
+}
+
+.master-system-status-bar {
+  font-size: 0.75rem;
+  z-index: 1000;
+}
+
+.actions-column-width {
+  width: 120px;
+}
+
+.fs-7 {
+  font-size: 0.85rem;
+}
+
+.fs-8 {
+  font-size: 0.72rem;
+}
+
+.font-sans {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ==========================================================================
+   4. CODE COMPILER TERMINAL VIEWPORT SCREEN
+   ========================================================================== */
+.terminal-viewport {
+  min-height: 350px;
+  max-height: 600px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Ensure the modal background covers the screen */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Layering logic for the editor */
+.editor-container {
+  position: relative;
+  height: 350px;
+}
+
+.manualImpexContent {
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.highlight-layer,
+.editor-container .form-control {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+/* Make text area transparent so highlights show through */
+.editor-container .form-control {
+  background: transparent;
+  color: #333;
+  z-index: 2;
+  resize: none;
+}
+
+.editor-container .highlight-layer {
+  z-index: 1;
+  color: transparent;
+  /* Hides actual text, only shows marks */
+  pointer-events: none;
+  /* Allows clicking through to textarea */
+  overflow: auto;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between; /* Pushes title to left, button to right */
+  align-items: center;            /* Vertically centers them */
+  padding: 1rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.modal-header .close {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #000;
+  cursor: pointer;
+  padding: 0.5rem;
+  margin: -0.5rem -0.5rem -0.5rem auto; /* "auto" pushes it to the right */
+}
+
+.modal-header .close:hover {
+  color: #555;
+}
+/* Full screen modal */
+.full-screen-modal {
+  width: 95%;
+  height: 80%;
+  margin: 2vh auto;
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  background: #fff;
+  padding: 20px;
+  border-radius: 5px;
+}
+
+/* Side-by-side flex layout */
+.editor-layout {
+  display: flex;
+  flex: 1;
+  gap: 20px;
+  overflow: hidden;
+  padding: 15px;
+}
+
+.editor-side {
+  flex: 3;
+  /* Editor takes 75% width */
+  height: 100%;
+}
+
+.error-side {
+  flex: 1;
+  /* Error box takes 25% width */
+  overflow-y: auto;
+  background: #fdfdfd;
+  border-left: 1px solid #ddd;
+  padding-left: 10px;
+}

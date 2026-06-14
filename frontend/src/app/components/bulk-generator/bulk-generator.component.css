@@ -1,0 +1,4 @@
+.container { max-width: 1000px; }
+.table input { width: 100%; border: none; background: transparent; }
+.upload-section { padding: 20px; border: 2px dashed #ccc; border-radius: 8px; }
+.btn-primary { margin-top: 10px; width: 100%; font-weight: bold; }
