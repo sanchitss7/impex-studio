@@ -267,7 +267,6 @@ small.badge.bg-primary.rounded-pill.ms-2 {
 
 .navigation-tabs li.nav-item button.active {
   background: #ffffff;
-  background: linear-gradient(180deg, rgb(247, 247, 247) 0%, rgba(255, 255, 255, 1) 58%);
   border: thin solid #d4d4d4;
   border-bottom: none;
   color: #0d6efd;
