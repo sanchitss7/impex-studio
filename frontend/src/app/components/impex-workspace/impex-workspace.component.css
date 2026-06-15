@@ -23,13 +23,6 @@
   cursor: pointer;
 }
 
-.terminal-viewport {
-  height: 450px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-size: 0.85rem;
-}
 
 .checkbox-column-width {
   width: 50px;
@@ -68,8 +61,8 @@
    4. CODE COMPILER TERMINAL VIEWPORT SCREEN
    ========================================================================== */
 .terminal-viewport {
-  min-height: 350px;
-  max-height: 600px;
+  min-height: 86.8%;
+
   overflow-y: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -248,7 +241,8 @@ small.badge.bg-primary.rounded-pill.ms-2 {
   padding: 0;
 }
 
-.upload-zone.dragging {
+.upload-zone.dragging,
+.upload-zone:hover {
   background-color: #e9ecef;
   border-color: #0056b3;
   transform: scale(1.02);
@@ -257,4 +251,28 @@ small.badge.bg-primary.rounded-pill.ms-2 {
 .upload-content {
   text-align: center;
   color: #6c757d;
+}
+
+.navigation-tabs li.nav-item button {
+  border-radius: 10px 11px 0px 0px;
+  padding: 15px 29px !important;
+  position: relative !important;
+  top: 1px;
+  z-index: 1;
+  color: #bbbbbb;
+  font-size: 17px;
+  text-transform: uppercase;
+  font-weight: 700 !important;
+}
+
+.navigation-tabs li.nav-item button.active {
+  background: #ffffff;
+  background: linear-gradient(180deg, rgb(247, 247, 247) 0%, rgba(255, 255, 255, 1) 58%);
+  border: thin solid #d4d4d4;
+  border-bottom: none;
+  color: #0d6efd;
+}
+
+.card-header.bg-white.p-4 {
+  border-radius: 0px;
 }
