@@ -14,7 +14,7 @@ const sanitizeContent = (content) => {
 
     // 2. Surgical EIN Fix: Force "XX-XXXXXXX" to ""XX-XXXXXXX""
     let sanitized = str.replace(/"(\d{2}-\d{7,8})"/g, '""$1""');
-    
+
     // 3. Escape: Protect existing "" placeholders, then escape remaining " to ""
     return sanitized
         .replace(/""/g, '@@@')
@@ -29,8 +29,8 @@ const buildImpexMatrix = (headerConfig, uid, contentMap) => {
         '$contentCatalogName=Omega Engineering Content Catalog',
         '$productCatalog=omegaengineeringProductCatalog',
         '$productCatalogName=Omega Engineering Product Catalog',
-        '$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Online])[default=$contentCatalog:Online]',
-        "$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Online'])[unique=true,default=$productCatalog:Online]",
+        '$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]',
+        "$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]",
         '$lang=en',
         '', // Empty line
     ];
@@ -43,7 +43,7 @@ const buildImpexMatrix = (headerConfig, uid, contentMap) => {
     // Use Object.entries to get the component_Id and content
     Object.entries(contentMap).forEach(([componentId, content]) => {
         const sanitized = sanitizeContent(content);
-        
+
         // Use the componentId from the map as the UID for each row
         // This makes each row specific to the component in that grid row
         const row = `;${componentId};"${sanitized}"`;
@@ -63,14 +63,14 @@ exports.buildImpexMatrix = (headerConfig, uid, contentMap) => {
         "$contentCatalogName=Omega Engineering Content Catalog",
         "$productCatalog=omegaengineeringProductCatalog",
         "$productCatalogName=Omega Engineering Product Catalog",
-        "$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Online])[default=$contentCatalog:Online]",
-        "$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Online'])[unique=true,default=$productCatalog:Online]",
+        "$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]",
+        "$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]",
         "$lang=en",
         "" // Empty line for clarity
     ];
     lines.push(...macros);
     // Default header configuration if none is provided
-    const defaultHeader = "INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=en-us]";
+    const defaultHeader = "INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=$lang]";
     lines.push(headerConfig || defaultHeader);
 
     // contentMap is now an array of row objects: [{ component_Id: '...', content: '...' }, ...]
@@ -99,6 +99,100 @@ exports.buildImpexMatrix = (headerConfig, uid, contentMap) => {
                 .replace(/[\u2039]/g, '<')
                 .replace(/[\u203A]/g, '>');
         };
+       
+        const buildSingleImpex = (uid, contentMap) => {
+            // 1. Locale mapping remains for the HEADER definition
+            const localeMap = {
+                'en': 'en',
+                'de': 'de_DE',
+                'es': 'es_ES',
+                'fr': 'fr_FR',
+                'it': 'it_IT',
+                'uk': 'en_UK'
+            };
+
+            // ... (keep your existing macro definitions here) ...
+
+            let output = [...macros];
+
+            Object.entries(contentMap).forEach(([lang, content]) => {
+                const locale = localeMap[lang] || lang;
+                const sanitized = sanitizeHtmlAttributes(sanitizeSpecialChars(content));
+
+                // CHANGE: Move the [lang=...] part to the HEADER line only
+                output.push(`INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=${locale}]`);
+                const langHeader = (lang === 'en') ? '$lang' : locale;  
+                // CHANGE: Output the row without the [lang=...] suffix
+                output.push(`;${uid};"${sanitized}"`);
+
+                output.push("");
+            });
+
+            return output.join('\n').trim();
+        };
+
+        const sanitizeHtmlAttributes = (html) => {
+            // Standardize HTML tags and double-double quote attributes
+            return html.replace(/<([a-zA-Z0-9]+)([^>]*)>/g, (match, tagName, attrPart) => {
+                const tag = tagName.toLowerCase();
+                if (!attrPart.trim()) return `<${tag}>`;
+
+                const attrRegex = /([a-zA-Z0-9-_]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+                const attrs = [];
+                let attrMatch;
+                let hasItemscope = false;
+
+                while ((attrMatch = attrRegex.exec(attrPart)) !== null) {
+                    const key = attrMatch[1].toLowerCase();
+                    const value = attrMatch[2] || attrMatch[3] || attrMatch[4] || "";
+                    if (key === 'itemscope') { hasItemscope = true; continue; }
+                    attrs.push(`${key}=""${value}""`);
+                }
+
+                if (hasItemscope || attrPart.toLowerCase().includes('itemscope')) {
+                    attrs.unshift('itemscope=""itemscope""');
+                }
+
+                return `<${tag}${attrs.length > 0 ? ' ' + attrs.join(' ') : ''}>`;
+            });
+        };
+
+        const buildImpexMatrix = (headerConfig, uid, contentMap) => {
+            const lines = [
+                "$contentCatalog=omegaengineeringContentCatalog",
+                "$contentCatalogName=Omega Engineering Content Catalog",
+                "$productCatalog=omegaengineeringProductCatalog",
+                "$productCatalogName=Omega Engineering Product Catalog",
+                "$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]",
+                "$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]",
+                "$lang=en",
+                ""
+            ];
+
+            // Use provided header or fall back to default
+            const defaultHeader = "INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=$lang]";
+            lines.push(headerConfig || defaultHeader);
+
+            // Ensure contentMap is processed as an array
+            if (contentMap && Array.isArray(contentMap)) {
+                contentMap.forEach((row) => {
+                    if (!row.content) return;
+
+                    // 1. Clean special characters
+                    let cleanContent = sanitizeSpecialChars(row.content);
+
+                    // 2. Standardize HTML attributes to ImpEx double-double format
+                    cleanContent = sanitizeHtmlAttributes(cleanContent);
+
+                    // 3. Construct line
+                    lines.push(`;${row.component_Id};"${cleanContent}"`);
+                });
+            }
+
+            return lines.join('\n').trim();
+        };
+
+        module.exports = { buildImpexMatrix };
 
         // Optimized Regex for HTML Impex Standardization
         processedHtml = processedHtml.replace(/<([a-zA-Z0-9]+)([^>]*)>/g, (match, tagName, attrPart) => {

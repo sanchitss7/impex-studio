@@ -15,7 +15,7 @@ exports.parseBulkUpload = async (req, res) => {
         const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-
+       
         // Convert sheet to JSON array
         const rawRows = XLSX.utils.sheet_to_json(worksheet);
 
@@ -33,9 +33,7 @@ exports.parseBulkUpload = async (req, res) => {
 
             return {
                 selected: true,
-                // Now it will find 'component_id' even if the Excel header was 'Component_ID'
                 component_Id: normalizedRow['component_id'] !== undefined ? String(normalizedRow['component_id']).trim() : `UNASSIGNED_ID_${index + 1}`,
-                // Now it will find 'content' even if the Excel header was 'CONTENT'
                 content: normalizedRow['content'] !== undefined ? String(normalizedRow['content']).trim() : ""
             };
         });

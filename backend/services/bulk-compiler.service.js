@@ -10,8 +10,8 @@ exports.compileMasterMatrix = (gridData, targetLanguage) => {
     lines.push('$contentCatalogName=Omega Engineering Content Catalog');
     lines.push('$productCatalog=omegaengineeringProductCatalog');
     lines.push('$productCatalogName=Omega Engineering Product Catalog');
-    lines.push('$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Online])[default=$contentCatalog:Online]');
-    lines.push("$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Online'])[unique=true,default=$productCatalog:Online]");
+    lines.push('$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]');
+    lines.push("$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]");
     lines.push('$lang=en'); // Empty line
     lines.push(''); // Empty line
 

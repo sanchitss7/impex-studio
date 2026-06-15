@@ -4,15 +4,10 @@
         <a class="navbar-brand fw-bold" href="#">
             <i class="bi bi-gear-fill me-2 text-primary"></i>Hybris Impex Automation Tool
         </a>
-
-        <div class="d-flex align-items-center text-white-50 gap-3">
-            <span class="cursor-pointer"><i class="bi bi-person-circle me-1"></i> Admin</span>
-            <span class="cursor-pointer"><i class="bi bi-sliders me-1"></i> Settings</span>
-        </div>
     </nav>
 
     <div class="container-fluid px-4 mt-4">
-        <ul class="nav nav-pills gap-2 bg-white p-2 rounded border shadow-sm">
+        <ul class="nav nav-pills gap-2 bg-white p-3 py-4 border border-start-0 border-end-0 border-top-0 border-primary border-3 rounded-3 rounded border shadow-sm justify-content-center">
 
             <li class="nav-item">
                 <button class="nav-link fw-semibold px-4" [class.active]="activeWorkspaceMode === 'bulk'"
@@ -34,7 +29,18 @@
             </li> -->
         </ul>
     </div>
-
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1055;">
+        <div id="copyToast" class="toast align-items-center text-white bg-success border-0" role="alert"
+            aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ImpEx content copied to clipboard!
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+                    aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
     <ng-container *ngIf="activeWorkspaceMode === 'bulk'">
         <div class="container-fluid px-4 mt-3">
             <div
@@ -61,15 +67,11 @@
 
                 <div class="d-flex gap-2">
 
-                    <div class="d-flex justify-content-end mb-3">
-                        <button class="btn btn-outline-secondary fw-semibold px-3 me-3">
-                            <i class="bi bi-download me-2"></i>EXPORT JSON
-                        </button>
-                      
-                        <button (click)="generateAndOpenModal()" class="btn btn-primary">
+                    <div class="d-flex justify-content-end">
+                        <button (click)="generateAndOpenModal()" class=" fw-bold px-3 py-2 btn btn-primary">
                             Generate & Review
                         </button>
-                        
+
                         <div class="modal-overlay" *ngIf="showModal">
                             <div class="modal-content full-screen-modal">
                                 <div class="modal-header">
@@ -79,17 +81,21 @@
 
                                 <div class="modal-body editor-layout">
                                     <div class="editor-side" style="width: 100%;">
-                                        <textarea id="impex-review" [ngModel]="manualImpexContent"
+                                        <textarea #impexArea id="impex-review" [ngModel]="manualImpexContent"
                                             (ngModelChange)="manualImpexContent = $event" class="form-control"
                                             style="font-family: monospace; height: 100%; resize: none;">
-                </textarea>
+                                        </textarea>
                                     </div>
 
                                 </div>
                                 <div class="modal-footer d-flex justify-content-between">
                                     <div class="toolbar">
-                                        <button (click)="fixImpExSyntax()" class="btn btn-primary">Fix Syntax
-                                            Errors</button>
+                                        <!-- <button (click)="fixImpExSyntax()" class="btn btn-primary">Fix Syntax
+                                            Errors</button> -->
+                                        <button (click)="copyBulkClipboard(impexArea.value)"
+                                            class="btn btn-outline-dark fw-semibold">
+                                            Copy Impex
+                                        </button>
                                     </div>
 
                                     <div class="download_imp">
@@ -109,13 +115,31 @@
 
 
             <div class="card mt-4 shadow-sm border border-secondary-subtle">
-                <div class="card-header bg-white py-3">
-                    <h5 class="card-title mb-0 fw-bold text-secondary">Impex Content Manager</h5>
+                <div class="card-header bg-white py-3 px-4">
+
+                    <h4 class="fw-bold text-dark mb-1">Bulk Impex Content Manager <small
+                            class="badge bg-primary rounded-pill ms-2">
+                            {{ bannerGridData.length }} Rows
+                        </small></h4>
+                    <p class="text-muted small">Streamline your data migration: Effortlessly convert, sanitize, and
+                        format bulk spreadsheet content into production-ready ImpEx files.
+                        language formats.</p>
+
                 </div>
 
                 <div class="card-body p-0">
-                    <div class="table-responsive">
-
+                    <div class="upload-zone" *ngIf="bannerGridData.length == 0" (dragover)="onDragOver($event)"
+                        (dragleave)="onDragLeave($event)" (drop)="onFileDropped($event)" [class.dragging]="isDragging">
+                        <div class="upload-content">
+                            <i class="bi bi-cloud-arrow-up" style="font-size: 3rem;"></i>
+                            <p>Drag & Drop your Excel file here</p>
+                            <button class="btn btn-outline-primary" (click)="fileInput.click()">
+                                Or Browse Files
+                            </button>
+                            <input type="file" #fileInput (change)="onFileSelected($event)" style="display: none;">
+                        </div>
+                    </div>
+                    <div class="table-responsive" *ngIf="bannerGridData.length > 0">
                         <table class="table table-hover align-middle mb-0 text-nowrap">
                             <thead
                                 class="table-light border-bottom border-secondary-subtle text-uppercase font-monospace fs-7">
@@ -130,6 +154,7 @@
                                 </tr>
                             </thead>
                             <tbody>
+
                                 <tr *ngFor="let row of bannerGridData; let i = index">
                                     <td class="text-center">
                                         <input type="checkbox" class="form-check-input" [(ngModel)]="row.selected"
@@ -148,49 +173,6 @@
                                 </tr>
                             </tbody>
                         </table>
-
-                        <!-- <table class="table table-hover align-middle mb-0 text-nowrap">
-                            <thead
-                                class="table-light border-bottom border-secondary-subtle text-uppercase font-monospace fs-7">
-                                <tr>
-                                    <th scope="col" class="text-center checkbox-column-width">
-                                        <input type="checkbox" class="form-check-input"
-                                            [(ngModel)]="masterCheckboxState" (change)="toggleAllRows()" />
-                                    </th>
-                                    <th scope="col">Component UID<span
-                                        class="d-block text-muted text-lowercase font-sans fs-8">Unique ID</span>
-                                    </th>
-                                    <th scope="col">content<span
-                                            class="d-block text-muted text-lowercase font-sans fs-8">Unique ID</span>
-                                    </th>
-                                    <th scope="col">Content [lang={{selectedLanguage.toLowerCase()}}]</th>
-                                    <th scope="col" class="text-center actions-column-width">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr *ngFor="let row of bannerGridData">
-                                    <td class="text-center">
-                                        <input type="checkbox" class="form-check-input" [(ngModel)]="row.selected"
-                                            (change)="checkRowParity()" />
-                                    </td>
-                                    <td class="font-monospace fw-bold text-dark">{{ row.component_Id }}</td>
-                                    <td>{{ row.content }}</td>
-                                    <td>{{ row.description }}</td>
-                                    <td class="text-center text-secondary fs-5">
-                                        <i class="bi bi-pencil-square me-2 cursor-pointer text-primary"></i>
-                                        <i class="bi bi-trash cursor-pointer text-danger"></i>
-                                    </td>
-                                </tr>
-                                <tr *ngIf="bannerGridData.length === 0">
-                                    <td colspan="5" class="text-center py-5 text-muted fst-italic">
-                                        <i
-                                            class="bi bi-cloud-arrow-up display-6 d-block mb-3 text-secondary-subtle"></i>
-                                        No components loaded yet. Click "Create New Banner" above to import an Excel
-                                        spreadsheet configuration matrix template.
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table> -->
                     </div>
                 </div>
             </div>
@@ -235,8 +217,8 @@
                                 class="form-control font-monospace border-secondary-subtle"></textarea>
                         </div>
 
-                        <button class="btn btn-primary fw-bold px-4 py-2 mt-2" (click)="processImpex()">
-                            <i class="bi bi-cpu-fill me-2"></i>Compile & Standardize Impex
+                        <button class="btn btn-primary fw-bold px-4 py-2 mt-2" (click)="generateSingleImpex()">
+                            <i class="bi bi-arrow-counterclockwise me-2"></i>Genrate & Review
                         </button>
                     </div>
 
@@ -245,14 +227,15 @@
                         <div class="mb-3 d-flex gap-2">
                             <button [disabled]="!outputResult" class="btn btn-outline-dark fw-semibold"
                                 (click)="copyToClipboard()">
-                                <i class="bi bi-clipboard-check me-2"></i>Copy Component Output
+                                <i class="bi bi-copy me-2"></i>Copy impex
                             </button>
                             <button [disabled]="!outputResult" class="btn btn-success fw-bold"
                                 (click)="downloadImpexFile()">
                                 <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .impex File
                             </button>
                         </div>
-                        <pre class="bg-dark text-light p-3 rounded border shadow-sm font-monospace position-relative terminal-viewport"><code>{{ outputResult || 'No generated code block compiled yet.' }}</code></pre>
+                        <pre
+                            class="bg-dark text-light p-3 rounded border shadow-sm font-monospace position-relative terminal-viewport"><code>{{ outputResult || 'No generated code block compiled yet.' }}</code></pre>
                     </div>
                 </div>
             </div>
@@ -266,7 +249,10 @@
         </div>
     </ng-container>
 
-
+    <button type="button" class="btn btn-primary go-to-top btn-lg shadow" (click)="scrollToTop()"
+        [class.d-none]="!showScrollButton">
+        <i class="bi bi-arrow-up"></i>
+    </button>
     <footer
         class="bg-secondary-subtle border-top border-secondary-subtle position-fixed bottom-0 start-0 end-0 px-4 py-2 d-flex justify-content-between text-muted master-system-status-bar">
         <div><i class="bi bi-hdd-network-fill text-success me-1"></i> {{ backendConnectionStatus }}</div>

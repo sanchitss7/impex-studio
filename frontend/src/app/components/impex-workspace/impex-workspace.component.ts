@@ -5,6 +5,7 @@ import { BulkGeneratorComponent } from '../bulk-generator/bulk-generator.compone
 import { ImpexApiService, ImpexPayload } from '../../services/impex-api.service';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { HostListener } from '@angular/core';
 import { NgZone } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
@@ -23,7 +24,7 @@ interface BannerRow {
   styleUrls: ['./impex-workspace.component.css']
 })
 export class ImpexWorkspaceComponent {
-
+  showScrollButton: boolean = false;
   headerConfig: string = 'INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=$lang]';
   uid: string = 'HomepageWelcomeParagraph';
   outputResult: string = '';
@@ -37,12 +38,12 @@ export class ImpexWorkspaceComponent {
     it: '<DIV CLASS="hero">Benvenuto</DIV>',
     uk: '<DIV CLASS="hero">Welcome</DIV>'
   };
-
+  isDragging: boolean = false;
   activeWorkspaceMode: 'single' | 'bulk' | 'bulk-generator' = 'bulk';
   selectedLanguage: string = 'DE';
   languagesList: string[] = ['DE', 'ES', 'FR', 'IT', 'UKR'];
   bannerGridData: BannerRow[] = [];
-  masterCheckboxState: boolean = false;
+  masterCheckboxState: boolean = true;
   backendConnectionStatus: string = 'Connected to Backend: http://localhost:3000';
 
   showModal: boolean = false;
@@ -55,29 +56,87 @@ export class ImpexWorkspaceComponent {
   constructor(private apiService: ImpexApiService, private cdr: ChangeDetectorRef, private http: HttpClient, private zone: NgZone) { }
 
   async generateAndOpenModal() {
-  try {
-    // Transform the grid data into a format the backend can process
-    // We assume the component_Id is the UID you want
-    const payload = { 
-      headerConfig: this.headerConfig, 
-      uid: this.uid, // You have this property defined in your class
-      contentMap: this.bannerGridData.reduce((acc, row) => {
-        // Here we map your grid rows to a simple key-value structure
-        acc[row.component_Id] = row.content; 
-        return acc;
-      }, {} as { [key: string]: string })
-    };
+    try {
+      // Transform the grid data into a format the backend can process
+      // We assume the component_Id is the UID you want
+      const payload = {
+        headerConfig: this.headerConfig,
+        uid: this.uid, // You have this property defined in your class
+        contentMap: this.bannerGridData.reduce((acc, row) => {
+          // Here we map your grid rows to a simple key-value structure
+          acc[row.component_Id] = row.content;
+          return acc;
+        }, {} as { [key: string]: string })
+      };
 
-    const response = await firstValueFrom(
-      this.http.post<{ content: string }>('http://localhost:3000/api/generate-impex', payload)
-    );
-    this.manualImpexContent = response.content;
-    this.showModal = true;
-    this.cdr.detectChanges();
-  } catch (err) {
-    console.error("Critical error in generation:", err);
+      const response = await firstValueFrom(
+        this.http.post<{ content: string }>('http://localhost:3000/api/generate-impex', payload)
+      );
+      this.manualImpexContent = response.content;
+      this.showModal = true;
+      this.cdr.detectChanges();
+    } catch (err) {
+      console.error("Critical error in generation:", err);
+    }
   }
-}
+
+  onDragOver(event: DragEvent) {
+    event.preventDefault();
+    this.isDragging = true;
+  }
+
+  onDragLeave(event: DragEvent) {
+    event.preventDefault();
+    this.isDragging = false;
+  }
+
+  onFileDropped(event: DragEvent) {
+    event.preventDefault();
+    this.isDragging = false;
+
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      this.handleFile(files[0]); // Reuse your file processing logic
+    }
+  }
+  @HostListener('window:scroll', [])
+  onWindowScroll() {
+    // Show button after scrolling down 300px
+    this.showScrollButton = window.pageYOffset > 300;
+  }
+
+  scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  handleFile(file: File) {
+    // Call your existing service logic
+    this.apiService.uploadBulkSpreadsheet(file).subscribe({
+      next: (res: any) => {
+        this.bannerGridData = [...(res.gridData || [])].map(item => ({
+          ...item,
+          selected: true // Default to true as you requested
+        }));
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  async generateSingleImpex() {
+    // 1. Create a clean map with lowercase tags
+    const cleanContentMap: { [key: string]: string } = {};
+
+    Object.keys(this.contentMap).forEach(lang => {
+      const rawContent = this.contentMap[lang];
+      // Apply the transformation here
+      cleanContentMap[lang] = this.lowercaseHtmlTags(rawContent);
+    });
+
+    // 2. Pass the clean map to the builderbuildSingleImpex
+    this.outputResult = this.buildSingleImpex(this.uid, this.contentMap);
+    this.cdr.detectChanges();
+  }
+
+
 
   private downloadFile(content: string, filename: string): void {
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
@@ -123,6 +182,86 @@ export class ImpexWorkspaceComponent {
       }
     });
   }
+  private sanitizeSpecialChars(str: string): string {
+    return str
+      .replace(/\0/g, '')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+      .replace(/[\u2019\u2018\u201A\u201B]/g, "'")
+      .replace(/[«»]/g, '"')
+      .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+      .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+      .replace(/[\u00A1]/g, '!')
+      .replace(/[\u00B0]/g, '°')
+      .replace(/[\u00A0]/g, ' ')
+      .replace(/[\uFFFD]/g, '')
+      .replace(/[\u00D0]/g, 'Đ')
+      .replace(/[\u00D1]/g, 'Ñ')
+      .replace(/[\u00D5]/g, 'Õ')
+      .replace(/[\u017D]/g, 'Ž')
+      .replace(/[\u2039]/g, '<')
+      .replace(/[\u203A]/g, '>');
+  }
+  private sanitizeHtmlAttributes(html: string): string {
+    // 1. Standardize tags and attributes BEFORE any quote doubling
+    // This regex looks for key="value" or key='value' or key=value
+    return html.replace(/<([a-zA-Z0-9]+)([^>]*)>/g, (match, tagName, attrPart) => {
+      const tag = tagName.toLowerCase();
+      if (!attrPart.trim()) return `<${tag}>`;
+
+      // Regex captures: 1=key, 2/3/4=value
+      const attrRegex = /([a-zA-Z0-9-_]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+      const attrs: string[] = [];
+      let attrMatch;
+
+      while ((attrMatch = attrRegex.exec(attrPart)) !== null) {
+        const key = attrMatch[1].toLowerCase();
+        const value = attrMatch[2] || attrMatch[3] || attrMatch[4] || "";
+
+        // Reconstruct: key="value"
+        attrs.push(`${key}="${value}"`);
+      }
+
+      return `<${tag}${attrs.length > 0 ? ' ' + attrs.join(' ') : ''}>`;
+    });
+  }
+
+  public buildSingleImpex(uid: string, contentMap: { [key: string]: string }): string {
+    const localeMap: { [key: string]: string } = {
+      'en': 'en', 'de': 'de_DE', 'es': 'es_ES',
+      'fr': 'fr_FR', 'it': 'it_IT', 'uk': 'en_UK'
+    };
+    const payloadSize = new TextEncoder().encode(this.contentMap['en']).length;
+    console.log("Payload Size (bytes):", payloadSize);
+
+    const macros = [
+      "$contentCatalog=omegaengineeringContentCatalog",
+      "$contentCatalogName=Omega Engineering Content Catalog",
+      "$productCatalog=omegaengineeringProductCatalog",
+      "$productCatalogName=Omega Engineering Content Catalog",
+      "$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]",
+      "$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]",
+      "$lang=en", ""
+    ];
+
+    let output = [...macros];
+
+    Object.entries(contentMap).forEach(([lang, content]) => {
+      const locale = localeMap[lang] || lang;
+
+      // 1. Normalize tags (lowercase)
+      let processed = this.lowercaseHtmlTags(content);
+      processed = this.sanitizeHtmlAttributes(this.sanitizeSpecialChars(processed));
+      const finalContent = processed.replace(/"/g, '""');
+
+      const langHeader = (lang === 'en') ? '$lang' : locale;
+
+      output.push(`INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=${langHeader}]`);
+      output.push(`;${uid};"${finalContent}"`);
+      output.push("");
+    });
+
+    return output.join('\n').trim();
+  }
 
   get contentMapKeys() { return Object.keys(this.contentMap); }
 
@@ -163,7 +302,29 @@ export class ImpexWorkspaceComponent {
       });
     });
   }
+
+  private lowercaseHtmlTags(html: string): string {
+    return html.replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (match, slash, tag, attrs) => {
+      return `<${slash}${tag.toLowerCase()}${attrs.toLowerCase()}>`;
+    });
+  }
   processImpex() {
+
+    // 1. Create a deep copy of contentMap and lowercase all HTML tags/attributes
+    const sanitizedContentMap = Object.keys(this.contentMap).reduce((acc, lang) => {
+      let content = this.contentMap[lang] || '';
+
+      // Use a regex to target tags (<...>) and lowercase them
+      // This targets the tag name and the attribute keys
+      content = content.replace(/<([a-zA-Z0-9]+)([^>]*)>/g, (match, tagName, attrPart) => {
+        return `<${tagName.toLowerCase()}${attrPart.toLowerCase()}>`;
+      });
+
+      acc[lang] = content;
+      return acc;
+    }, {} as { [key: string]: string });
+
+    // 2. Use the sanitized map in the payload
     const payload: ImpexPayload = {
       headerConfig: this.headerConfig,
       uid: this.uid,
@@ -179,6 +340,20 @@ export class ImpexWorkspaceComponent {
         this.outputResult = 'Error: Check backend logs for details.';
       }
     });
+  }
+
+  async copyBulkClipboard(text: string): Promise<void> {
+    try {
+      if (!text) {
+        alert("No content to copy!");
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      alert('ImpEx content copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy: ', err);
+      alert('Failed to copy content. Check console for errors.');
+    }
   }
 
   copyToClipboard() {
@@ -367,13 +542,16 @@ export class ImpexWorkspaceComponent {
     if (!file) return;
     this.apiService.uploadBulkSpreadsheet(file).subscribe({
       next: (res: any) => {
-        this.bannerGridData = (res.gridData || []).map((item: any) => ({
+        // Create a fresh copy to trigger Angular change detection
+        this.bannerGridData = [...res.gridData.map((item: any) => ({
           component_Id: item.component_Id || 'N/A',
           content: item.content || 'No content',
           description: item.description || 'No Description',
-          selected: false
-        }));
-        this.cdr.detectChanges();
+          selected: true
+        }))];
+
+        console.log("UI Grid Data now contains:", this.bannerGridData);
+        this.cdr.detectChanges(); // Force update
       }
     });
   }
