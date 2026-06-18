@@ -41,11 +41,11 @@ export class ImpexWorkspaceComponent {
   languages: string[] = ['en', 'de', 'es', 'fr', 'it', 'en_GB'];
   contentMap: { [key: string]: string } = {
     en: '<DIV CLASS="hero">Welcome "6-1100394-1"</DIV>',
-    de: '<DIV CLASS="hero">Willkommen "6-1100394-1"</DIV>',
-    es: '<DIV CLASS="hero">Bienvenido "6-1100394-1"</DIV>',
-    fr: '<DIV CLASS="hero">Bienvenue "6-1100394-1"</DIV>',
-    it: '<DIV CLASS="hero">Benvenuto "6-1100394-1"</DIV>',
-    en_GB: '<DIV CLASS="hero">Welcome "6-1100394-1"</DIV>'
+    de: '',
+    es: '',
+    fr: '',
+    it: '',
+    en_GB: ''
   };
   isDragging: boolean = false;
   activeWorkspaceMode: 'single' | 'bulk' = 'bulk';
@@ -67,18 +67,12 @@ export class ImpexWorkspaceComponent {
   // ... imports remain the same
   async generateAndOpenModal() {
     try {
-      // 1. Map the selection to DeepL-supported language codes
-      // Use the deepLMap defined as a class property
       const targetLang = this.deepLMap[this.selectedLanguage.toLowerCase()] || 'EN-GB';
 
-      console.log(`DEBUG: Translating to DeepL code: ${targetLang}`);
-
-      // 2. Prepare translation requests
+      // 1. Prepare translation requests
       const translationObservables = this.bannerGridData.map(row => {
         const textToTranslate = row.originalContent || row.content;
         const idRegex = /"\d+-\d+-\d+"/g;
-
-        // Mask ID so DeepL doesn't try to translate/break the format
         const match = textToTranslate.match(idRegex);
         const maskedText = textToTranslate.replace(idRegex, '###ID###');
 
@@ -87,34 +81,43 @@ export class ImpexWorkspaceComponent {
           target_lang: targetLang
         }).pipe(
           map((res: any) => {
-            const translated = res.translatedText || maskedText;
-            // Unmask ID back into the translated string
-            const finalContent = match ? translated.replace('###ID###', match[0]) : translated;
+            let translated = res.translatedText || maskedText;
+
+            // 1. WIPE: Strip all typography and existing quotes/spaces around the placeholder
+            translated = translated.replace(/[«»“”„‟" ]*###ID###[«»“”„‟" ]*/g, '###ID###');
+
+            // 2. REBUILD: Inject exactly one space and one pair of quotes
+            const cleanId = match?.[0]?.replace(/[^\d-]/g, '') || '';
+            const finalContent = match
+              ? translated.replace('###ID###', ' "' + cleanId + '"') // ONE pair of quotes here
+              : translated;
+
             return { ...row, content: finalContent };
-          }),
-          catchError(err => {
-            console.error(`Translation failed for ${row.component_Id}:`, err);
-            return of({ ...row });
           })
         );
       });
 
-      // 3. Execute all translations
+      // 2. Execute all translations
       const translatedRows = await firstValueFrom(forkJoin(translationObservables));
 
-      // 4. Prepare payload for ImpEx generation
-      // We send translatedRows directly so the backend can iterate over the full content set
+      // 3. Prepare payload that satisfies both Single and Bulk backends
+      const sanitizedRows = translatedRows.map(row => ({
+        uid: row.component_Id,
+        lang: this.selectedLanguage.toLowerCase(),
+        content: this.sanitizeContent(row.content) // Cleaned before reaching payload
+      }));
+
       const payload = {
         uid: this.uid,
-        contentMap: translatedRows.reduce((acc, row) => {
-          // Mapping the component_Id as the key for language
-          acc[this.selectedLanguage.toLowerCase()] = row.content;
-          return acc;
-        }, {} as { [key: string]: string }),
+        headerConfig: this.headerConfig,
+        rows: sanitizedRows, // Use the sanitized array
+        contentMap: {},
         selectedLanguage: this.selectedLanguage
       };
 
-      // 5. Generate ImpEx
+      console.log("DEBUG: Sending payload to /api/generate-impex:", payload);
+
+      // 4. Generate ImpEx
       const response: any = await firstValueFrom(
         this.http.post('http://localhost:3000/api/generate-impex', payload)
       );
@@ -125,9 +128,10 @@ export class ImpexWorkspaceComponent {
 
     } catch (err) {
       console.error("Critical Generation Error:", err);
-      alert("An error occurred during ImpEx generation. Check console for details.");
+      alert("An error occurred during ImpEx generation. Please check the browser console.");
     }
   }
+
 
   private decodeHtmlEntities(str: string): string {
     if (!str) return '';
@@ -213,6 +217,7 @@ export class ImpexWorkspaceComponent {
       cleanContentMap[lang] = this.sanitizeContent(this.contentMap[lang] || "");
     });
 
+
     // 2. Pass the clean map using the correct service variable
     const payload = {
       uid: this.uid,
@@ -285,8 +290,7 @@ export class ImpexWorkspaceComponent {
         });
       }
     });
-  }
-  private sanitizeContent(str: string): string {
+  } private sanitizeContent(str: string): string {
     if (!str) return '';
 
     // 1. Decode entities and apply character sanitization
@@ -294,8 +298,6 @@ export class ImpexWorkspaceComponent {
       .replace(/\0/g, '')
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
       .replace(/[\u2019\u2018\u201A\u201B]/g, "'")
-      .replace(/[«»]/g, '"')
-      .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
       .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
       .replace(/[\u00A1]/g, '!')
       .replace(/[\u00B0]/g, '°')
@@ -305,37 +307,40 @@ export class ImpexWorkspaceComponent {
       .replace(/[\u00D1]/g, 'Ñ')
       .replace(/[\u00D5]/g, 'Õ')
       .replace(/[\u017D]/g, 'Ž')
+      .replace(/[«»“”„‟]/g, '"')
+      .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
       .replace(/[\u2039]/g, '<')
       .replace(/[\u203A]/g, '>');
 
-    // 2. Sanitize HTML Attributes and Tags
-    val = val.replace(/<\/?([a-zA-Z0-9]+)([^>]*)>/g, (match, tagName, attrPart) => {
+    // 2. Sanitize HTML Tags and Attributes
+    val = val.replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (match, slash, tagName, attrPart) => {
       const tag = tagName.toLowerCase();
-      const isClosing = match.startsWith('</');
 
       // Handle closing tags
-      if (isClosing) {
-        return `</${tag}>`;
-      }
+      if (slash) return `</${tag}>`;
 
-      // Handle opening tags with no attributes
-      if (!attrPart || !attrPart.trim()) {
-        return `<${tag}>`;
-      }
+      // Handle opening tags
+      if (!attrPart || !attrPart.trim()) return `<${tag}>`;
 
-      // Handle attributes
+      // Normalize attributes: key="value"
       const attrRegex = /([a-zA-Z0-9-_]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
       const attrs = [];
       let attrMatch;
 
       while ((attrMatch = attrRegex.exec(attrPart)) !== null) {
         const key = attrMatch[1].toLowerCase();
-        const value = attrMatch[2] || attrMatch[3] || attrMatch[4] || "";
+        // Get the value, strip any existing surrounding quotes
+        const value = (attrMatch[2] || attrMatch[3] || attrMatch[4] || "").replace(/^["']|["']$/g, '');
         attrs.push(`${key}="${value}"`);
       }
 
       return `<${tag}${attrs.length > 0 ? ' ' + attrs.join(' ') : ''}>`;
     });
+
+    // 3. SAP Quote Escaping: 
+    // Important: Perform this LAST. 
+    // Turn all " into "" so that content like class="hero" becomes class=""hero""
+    val = val.replace(/"/g, '""');
 
     return val;
   }
@@ -379,28 +384,41 @@ export class ImpexWorkspaceComponent {
     });
   }
 
-  private lowercaseHtmlTags(html: string): string {
-    return html.replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (match, slash, tag, attrs) => {
-      return `<${slash}${tag.toLowerCase()}${attrs.toLowerCase()}>`;
-    });
-  }
+
   processImpex() {
-    // Ensure contentMap is the object: { 'en': '...', 'en_gb': '...', ... }
+    const cleanContentMap: { [key: string]: string } = {};
+
+    Object.keys(this.contentMap).forEach(lang => {
+      let text = this.contentMap[lang] || "";
+
+      // 1. Strip existing quote messes around ID
+      text = text.replace(/[«»“”„‟" ]*###ID###[«»“”„‟" ]*/g, '###ID###');
+      const idMatch = text.match(/\d+-\d+-\d+/);
+      const cleanId = idMatch ? idMatch[0] : '';
+
+      // 2. Inject ID as ""ID""
+      text = text.replace('###ID###', ' ""' + cleanId + '""');
+
+      // 3. Sanitize (This now handles tag lowercasing AND quote escaping)
+      cleanContentMap[lang] = this.sanitizeContent(text);
+    });
+
     const payload = {
       uid: this.uid,
-      contentMap: this.contentMap
+      contentMap: cleanContentMap,
+      // Ensure the backend knows the language context
+      selectedLanguage: this.selectedLanguage
     };
 
     this.apiService.generateImpex(payload as any).subscribe({
       next: (res: any) => {
-        this.outputResult = res.impexData;
-        this.showModal = true; // Open modal after generating
+        this.outputResult = res.impexData || res.content;
+        this.showModal = true;
         this.cdr.detectChanges();
       },
       error: (err) => console.error("Error:", err)
     });
   }
-
   async copyBulkClipboard(text: string): Promise<void> {
     try {
       if (!text) {
@@ -482,18 +500,26 @@ export class ImpexWorkspaceComponent {
   onFileSelected(event: any): void {
     const file: File = event.target.files[0];
     if (!file) return;
+
+    // Ensure your service matches the route in server.js
     this.apiService.uploadBulkSpreadsheet(file).subscribe({
       next: (res: any) => {
-        // Create a fresh copy to trigger Angular change detection
-        this.bannerGridData = [...res.gridData.map((item: any) => ({
-          component_Id: item.component_Id || 'N/A',
-          content: item.content || 'No content',
-          description: item.description || 'No Description',
-          selected: true
-        }))];
-
-        console.log("UI Grid Data now contains:", this.bannerGridData);
-        this.cdr.detectChanges(); // Force update
+        if (res && res.gridData) {
+          this.bannerGridData = [...res.gridData].map((item: any) => ({
+            component_Id: item.component_Id || 'N/A',
+            content: item.content || 'No content',
+            // ADD THESE MISSING REQUIRED PROPERTIES:
+            originalContent: item.content || '',
+            description: item.description || 'No Description',
+            outputResult: '', // Initialize as empty
+            selected: true
+          }));
+          this.cdr.detectChanges();
+        }
+      },
+      error: (err) => {
+        console.error("Upload Error:", err);
+        alert("Failed to upload file. Check console.");
       }
     });
   }

@@ -23,33 +23,6 @@ const buildUnifiedImpex = ({ headerConfig, uid, displayLang, contentMap, selecte
         let normalized = cleaned.replace(/""/g, '"');
         return normalized.replace(/"/g, '""');
     };
-
-    const lines = [
-        "$contentCatalog=omegaengineeringContentCatalog",
-        "$productCatalog=omegaengineeringProductCatalog",
-        "$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]",
-        "$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]",
-        ""
-    ];
-
-    if (Array.isArray(contentMap)) {
-        // BULK MODE: Use the displayLang provided by the controller
-        const header = `INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=${displayLang || 'en_UK'}]`;
-        lines.push(header);
-
-        contentMap.forEach(row => {
-            lines.push(`;${row.component_Id || 'unknown'};"${formatContent(row.content)}"`);
-        });
-    } else if (typeof contentMap === 'object') {
-        // SINGLE MODE
-        Object.entries(contentMap).forEach(([lang, content]) => {
-            lines.push(`INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=${displayLang}]`);
-            lines.push(`;${uid};"${formatContent(content)}"`);
-            lines.push("");
-        });
-    }
-
-    return lines.join('\n');
 };
 
 const decodeHtmlEntities = (str) => {
