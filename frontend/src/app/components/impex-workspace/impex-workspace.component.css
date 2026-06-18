@@ -33,7 +33,8 @@
 }
 
 .lang-dropdown {
-  width: 200px;
+  width: auto;
+  cursor: pointer;
 }
 
 .master-system-status-bar {
@@ -62,10 +63,9 @@
    ========================================================================== */
 .terminal-viewport {
   min-height: 86.8%;
-
-  overflow-y: auto;
-  white-space: pre-wrap;
+  white-space: pre;
   word-wrap: break-word;
+  overflow: auto;
 }
 
 /* Ensure the modal background covers the screen */
@@ -163,6 +163,7 @@
   background: #fff;
   padding: 20px;
   border-radius: 5px;
+  top: -20px;
 }
 
 /* Side-by-side flex layout */
@@ -270,8 +271,4 @@ small.badge.bg-primary.rounded-pill.ms-2 {
   border: thin solid #d4d4d4;
   border-bottom: none;
   color: #0d6efd;
-}
-
-.card-header.bg-white.p-4 {
-  border-radius: 0px;
 }

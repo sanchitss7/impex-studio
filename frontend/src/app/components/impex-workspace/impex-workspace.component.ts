@@ -1,25 +1,27 @@
 import { Component, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { BulkGeneratorComponent } from '../bulk-generator/bulk-generator.component';
-import { ImpexApiService, ImpexPayload } from '../../services/impex-api.service';
+import { ImpexApiService } from '../../services/impex-api.service';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { HostListener } from '@angular/core';
 import { NgZone } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { forkJoin, firstValueFrom, catchError, of, map } from 'rxjs';
+import { ImpexPayload } from '../../services/impex-api.service';
 
 interface BannerRow {
+  originalContent: string;
   component_Id: string;
   content: string;
   description: string;
   selected?: boolean;
+  outputResult: string;
 }
 
 @Component({
   selector: 'app-impex-workspace',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive, BulkGeneratorComponent],
+  imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive],
   templateUrl: './impex-workspace.component.html',
   styleUrls: ['./impex-workspace.component.css']
 })
@@ -28,20 +30,27 @@ export class ImpexWorkspaceComponent {
   headerConfig: string = 'INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=$lang]';
   uid: string = 'HomepageWelcomeParagraph';
   outputResult: string = '';
-
-  languages: string[] = ['en', 'de', 'es', 'fr', 'it', 'uk'];
+  private deepLMap: Record<string, string> = {
+    'en': 'EN-US',
+    'en_gb': 'EN-GB',
+    'de': 'DE',
+    'fr': 'FR',
+    'es': 'ES',
+    'it': 'IT'
+  };
+  languages: string[] = ['en', 'de', 'es', 'fr', 'it', 'en_GB'];
   contentMap: { [key: string]: string } = {
-    en: '<DIV CLASS="hero">Welcome</DIV>',
-    de: '<DIV CLASS="hero">Willkommen</DIV>',
-    es: '<DIV CLASS="hero">Bienvenido</DIV>',
-    fr: '<DIV CLASS="hero">Bienvenue</DIV>',
-    it: '<DIV CLASS="hero">Benvenuto</DIV>',
-    uk: '<DIV CLASS="hero">Welcome</DIV>'
+    en: '<DIV CLASS="hero">Welcome "6-1100394-1"</DIV>',
+    de: '<DIV CLASS="hero">Willkommen "6-1100394-1"</DIV>',
+    es: '<DIV CLASS="hero">Bienvenido "6-1100394-1"</DIV>',
+    fr: '<DIV CLASS="hero">Bienvenue "6-1100394-1"</DIV>',
+    it: '<DIV CLASS="hero">Benvenuto "6-1100394-1"</DIV>',
+    en_GB: '<DIV CLASS="hero">Welcome "6-1100394-1"</DIV>'
   };
   isDragging: boolean = false;
-  activeWorkspaceMode: 'single' | 'bulk' | 'bulk-generator' = 'bulk';
+  activeWorkspaceMode: 'single' | 'bulk' = 'bulk';
   selectedLanguage: string = 'DE';
-  languagesList: string[] = ['DE', 'ES', 'FR', 'IT', 'UKR'];
+  languagesList: string[] = ['DE', 'ES', 'FR', 'IT', 'EN_GB'];
   bannerGridData: BannerRow[] = [];
   masterCheckboxState: boolean = true;
   backendConnectionStatus: string = 'Connected to Backend: http://localhost:3000';
@@ -55,29 +64,83 @@ export class ImpexWorkspaceComponent {
 
   constructor(private apiService: ImpexApiService, private cdr: ChangeDetectorRef, private http: HttpClient, private zone: NgZone) { }
 
+  // ... imports remain the same
   async generateAndOpenModal() {
     try {
-      // Transform the grid data into a format the backend can process
-      // We assume the component_Id is the UID you want
+      // 1. Map the selection to DeepL-supported language codes
+      // Use the deepLMap defined as a class property
+      const targetLang = this.deepLMap[this.selectedLanguage.toLowerCase()] || 'EN-GB';
+
+      console.log(`DEBUG: Translating to DeepL code: ${targetLang}`);
+
+      // 2. Prepare translation requests
+      const translationObservables = this.bannerGridData.map(row => {
+        const textToTranslate = row.originalContent || row.content;
+        const idRegex = /"\d+-\d+-\d+"/g;
+
+        // Mask ID so DeepL doesn't try to translate/break the format
+        const match = textToTranslate.match(idRegex);
+        const maskedText = textToTranslate.replace(idRegex, '###ID###');
+
+        return this.http.post('http://localhost:3000/api/translate', {
+          text: maskedText,
+          target_lang: targetLang
+        }).pipe(
+          map((res: any) => {
+            const translated = res.translatedText || maskedText;
+            // Unmask ID back into the translated string
+            const finalContent = match ? translated.replace('###ID###', match[0]) : translated;
+            return { ...row, content: finalContent };
+          }),
+          catchError(err => {
+            console.error(`Translation failed for ${row.component_Id}:`, err);
+            return of({ ...row });
+          })
+        );
+      });
+
+      // 3. Execute all translations
+      const translatedRows = await firstValueFrom(forkJoin(translationObservables));
+
+      // 4. Prepare payload for ImpEx generation
+      // We send translatedRows directly so the backend can iterate over the full content set
       const payload = {
-        headerConfig: this.headerConfig,
-        uid: this.uid, // You have this property defined in your class
-        contentMap: this.bannerGridData.reduce((acc, row) => {
-          // Here we map your grid rows to a simple key-value structure
-          acc[row.component_Id] = row.content;
+        uid: this.uid,
+        contentMap: translatedRows.reduce((acc, row) => {
+          // Mapping the component_Id as the key for language
+          acc[this.selectedLanguage.toLowerCase()] = row.content;
           return acc;
-        }, {} as { [key: string]: string })
+        }, {} as { [key: string]: string }),
+        selectedLanguage: this.selectedLanguage
       };
 
-      const response = await firstValueFrom(
-        this.http.post<{ content: string }>('http://localhost:3000/api/generate-impex', payload)
+      // 5. Generate ImpEx
+      const response: any = await firstValueFrom(
+        this.http.post('http://localhost:3000/api/generate-impex', payload)
       );
-      this.manualImpexContent = response.content;
+
+      this.manualImpexContent = response.impexData || response.content;
       this.showModal = true;
       this.cdr.detectChanges();
+
     } catch (err) {
-      console.error("Critical error in generation:", err);
+      console.error("Critical Generation Error:", err);
+      alert("An error occurred during ImpEx generation. Check console for details.");
     }
+  }
+
+  private decodeHtmlEntities(str: string): string {
+    if (!str) return '';
+    return str
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+  }
+
+  onLanguageChange(event: any) {
+    this.selectedLanguage = event.target.value;
+    console.log("DEBUG: Language changed to:", this.selectedLanguage);
   }
 
   onDragOver(event: DragEvent) {
@@ -108,32 +171,65 @@ export class ImpexWorkspaceComponent {
   scrollToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+
   handleFile(file: File) {
-    // Call your existing service logic
+    // Show a loading state if you have one
+    console.log("Uploading file...");
+
     this.apiService.uploadBulkSpreadsheet(file).subscribe({
       next: (res: any) => {
-        this.bannerGridData = [...(res.gridData || [])].map(item => ({
-          ...item,
-          selected: true // Default to true as you requested
-        }));
+        if (res && res.gridData) {
+          this.bannerGridData = [...res.gridData].map(item => ({
+            ...item,
+            selected: true
+          }));
+          console.log("File uploaded and grid updated successfully.");
+        } else {
+          console.warn("Upload successful, but no grid data returned.");
+          this.bannerGridData = [];
+        }
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        // 1. Log the full error to the console for debugging
+        console.error("Upload Error:", err);
+
+        // 2. Provide user feedback
+        const errorMessage = err.error?.message || "Failed to upload file. Please check your connection or file format.";
+        alert(errorMessage);
+
+        // 3. (Optional) Reset your UI state or trigger a specific error view
         this.cdr.detectChanges();
       }
     });
   }
 
   async generateSingleImpex() {
-    // 1. Create a clean map with lowercase tags
+    // 1. Create a clean map
     const cleanContentMap: { [key: string]: string } = {};
 
     Object.keys(this.contentMap).forEach(lang => {
-      const rawContent = this.contentMap[lang];
-      // Apply the transformation here
-      cleanContentMap[lang] = this.lowercaseHtmlTags(rawContent);
+      const rawContent = this.contentMap[lang] || "";
+      cleanContentMap[lang] = this.sanitizeContent(this.contentMap[lang] || "");
     });
 
-    // 2. Pass the clean map to the builderbuildSingleImpex
-    this.outputResult = this.buildSingleImpex(this.uid, this.contentMap);
-    this.cdr.detectChanges();
+    // 2. Pass the clean map using the correct service variable
+    const payload = {
+      uid: this.uid,
+      contentMap: cleanContentMap,
+      headerConfig: this.headerConfig,
+      selectedLanguage: 'en'
+    };
+
+    // Use 'this.apiService' (as defined in your constructor)
+    this.apiService.buildUnifiedImpex(payload).subscribe({
+      next: (res: any) => {
+        // Ensure this matches the key returned by your server
+        this.outputResult = res.impexData || res.content;
+        this.cdr.detectChanges();
+      },
+      error: (err) => console.error("Generation failed:", err)
+    });
   }
 
 
@@ -174,16 +270,27 @@ export class ImpexWorkspaceComponent {
   translateSelectedRows() {
     const selectedRows = this.bannerGridData.filter(row => row.selected);
     if (selectedRows.length === 0) return alert('Select rows.');
+
     selectedRows.forEach(row => {
       if (row.content) {
-        this.apiService.autoTranslate(row.content, this.selectedLanguage).subscribe(res => {
-          if (res.translatedText) row.content = res.translatedText;
+        // Ensure 'this.selectedLanguage' matches your languagesList ['DE', 'ES', etc.]
+        this.apiService.autoTranslate(row.content, this.selectedLanguage).subscribe({
+          next: (res: any) => {
+            if (res.translatedText) {
+              row.content = res.translatedText;
+              this.cdr.detectChanges();
+            }
+          },
+          error: (err) => console.error("Translation failed:", err)
         });
       }
     });
   }
-  private sanitizeSpecialChars(str: string): string {
-    return str
+  private sanitizeContent(str: string): string {
+    if (!str) return '';
+
+    // 1. Decode entities and apply character sanitization
+    let val = this.decodeHtmlEntities(String(str))
       .replace(/\0/g, '')
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
       .replace(/[\u2019\u2018\u201A\u201B]/g, "'")
@@ -200,76 +307,45 @@ export class ImpexWorkspaceComponent {
       .replace(/[\u017D]/g, 'Ž')
       .replace(/[\u2039]/g, '<')
       .replace(/[\u203A]/g, '>');
-  }
-  private sanitizeHtmlAttributes(html: string): string {
-    // 1. Standardize tags and attributes BEFORE any quote doubling
-    // This regex looks for key="value" or key='value' or key=value
-    return html.replace(/<([a-zA-Z0-9]+)([^>]*)>/g, (match, tagName, attrPart) => {
-      const tag = tagName.toLowerCase();
-      if (!attrPart.trim()) return `<${tag}>`;
 
-      // Regex captures: 1=key, 2/3/4=value
+    // 2. Sanitize HTML Attributes and Tags
+    val = val.replace(/<\/?([a-zA-Z0-9]+)([^>]*)>/g, (match, tagName, attrPart) => {
+      const tag = tagName.toLowerCase();
+      const isClosing = match.startsWith('</');
+
+      // Handle closing tags
+      if (isClosing) {
+        return `</${tag}>`;
+      }
+
+      // Handle opening tags with no attributes
+      if (!attrPart || !attrPart.trim()) {
+        return `<${tag}>`;
+      }
+
+      // Handle attributes
       const attrRegex = /([a-zA-Z0-9-_]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
-      const attrs: string[] = [];
+      const attrs = [];
       let attrMatch;
 
       while ((attrMatch = attrRegex.exec(attrPart)) !== null) {
         const key = attrMatch[1].toLowerCase();
         const value = attrMatch[2] || attrMatch[3] || attrMatch[4] || "";
-
-        // Reconstruct: key="value"
         attrs.push(`${key}="${value}"`);
       }
 
       return `<${tag}${attrs.length > 0 ? ' ' + attrs.join(' ') : ''}>`;
     });
+
+    return val;
   }
-
-  public buildSingleImpex(uid: string, contentMap: { [key: string]: string }): string {
-    const localeMap: { [key: string]: string } = {
-      'en': 'en', 'de': 'de_DE', 'es': 'es_ES',
-      'fr': 'fr_FR', 'it': 'it_IT', 'uk': 'en_UK'
-    };
-    const payloadSize = new TextEncoder().encode(this.contentMap['en']).length;
-    console.log("Payload Size (bytes):", payloadSize);
-
-    const macros = [
-      "$contentCatalog=omegaengineeringContentCatalog",
-      "$contentCatalogName=Omega Engineering Content Catalog",
-      "$productCatalog=omegaengineeringProductCatalog",
-      "$productCatalogName=Omega Engineering Content Catalog",
-      "$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]",
-      "$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]",
-      "$lang=en", ""
-    ];
-
-    let output = [...macros];
-
-    Object.entries(contentMap).forEach(([lang, content]) => {
-      const locale = localeMap[lang] || lang;
-
-      // 1. Normalize tags (lowercase)
-      let processed = this.lowercaseHtmlTags(content);
-      processed = this.sanitizeHtmlAttributes(this.sanitizeSpecialChars(processed));
-      const finalContent = processed.replace(/"/g, '""');
-
-      const langHeader = (lang === 'en') ? '$lang' : locale;
-
-      output.push(`INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=${langHeader}]`);
-      output.push(`;${uid};"${finalContent}"`);
-      output.push("");
-    });
-
-    return output.join('\n').trim();
-  }
-
   get contentMapKeys() { return Object.keys(this.contentMap); }
 
   updateTranslation(lang: string, value: string) { this.contentMap[lang] = value; }
 
   resetSingleComponentForm() {
     this.uid = '';
-    this.contentMap = { en: '', de: '', es: '', fr: '', it: '', uk: '' };
+    this.contentMap = { en: '', de: '', es: '', fr: '', it: '', en_GB: '' };
   }
 
   autoPopulateTranslations() {
@@ -309,36 +385,19 @@ export class ImpexWorkspaceComponent {
     });
   }
   processImpex() {
-
-    // 1. Create a deep copy of contentMap and lowercase all HTML tags/attributes
-    const sanitizedContentMap = Object.keys(this.contentMap).reduce((acc, lang) => {
-      let content = this.contentMap[lang] || '';
-
-      // Use a regex to target tags (<...>) and lowercase them
-      // This targets the tag name and the attribute keys
-      content = content.replace(/<([a-zA-Z0-9]+)([^>]*)>/g, (match, tagName, attrPart) => {
-        return `<${tagName.toLowerCase()}${attrPart.toLowerCase()}>`;
-      });
-
-      acc[lang] = content;
-      return acc;
-    }, {} as { [key: string]: string });
-
-    // 2. Use the sanitized map in the payload
-    const payload: ImpexPayload = {
-      headerConfig: this.headerConfig,
+    // Ensure contentMap is the object: { 'en': '...', 'en_gb': '...', ... }
+    const payload = {
       uid: this.uid,
       contentMap: this.contentMap
     };
 
-    this.apiService.generateImpex(payload).subscribe({
+    this.apiService.generateImpex(payload as any).subscribe({
       next: (res: any) => {
-        this.outputResult = res.impexData || 'No content generated.';
+        this.outputResult = res.impexData;
+        this.showModal = true; // Open modal after generating
+        this.cdr.detectChanges();
       },
-      error: (err) => {
-        console.error("Generation Error:", err);
-        this.outputResult = 'Error: Check backend logs for details.';
-      }
+      error: (err) => console.error("Error:", err)
     });
   }
 
@@ -367,123 +426,6 @@ export class ImpexWorkspaceComponent {
     }
   }
 
-  fixImpExSyntax() {
-    const lines = this.manualImpexContent.split('\n');
-
-    this.manualImpexContent = lines.map(line => {
-      const trimmed = line.trim();
-
-      // SKIP: Macros, Headers, Empty lines, or the INSERT_UPDATE definition line
-      if (!trimmed ||
-        trimmed.startsWith('$') ||
-        trimmed.startsWith('INSERT_UPDATE') ||
-        trimmed.startsWith('#')) {
-        return line;
-      }
-
-      if (!line.includes(';')) return line;
-
-      // Isolate the content part after the last semicolon
-      const lastSemicolonIndex = line.lastIndexOf(';');
-      const prefix = line.substring(0, lastSemicolonIndex + 1);
-      let content = line.substring(lastSemicolonIndex + 1).trim();
-
-      // Remove outer wrappers if present
-      const isWrapped = content.startsWith('"') && content.endsWith('"');
-      if (isWrapped) content = content.substring(1, content.length - 1);
-
-      content = content
-        .replace(/""/g, '@@@')
-        .replace(/"/g, '""')
-        .replace(/@@@/g, '""');
-
-      // Return the line with the cleaned content wrapped back in quotes
-      return `${prefix}"${content}"`;
-    }).join('\n');
-
-    console.log("Fix Applied: Data rows processed, headers/macros ignored.");
-  }
-
-  autoFixImpex() {
-    this.zone.run(() => { // 3. Wrap in NgZone to force change detection
-      const lines = this.manualImpexContent.split('\n');
-      const fixedLines = lines.map(line => {
-        if (!line.trim() || line.startsWith('#') || line.startsWith('$') || line.startsWith('INSERT_UPDATE')) return line;
-        const lastSemicolonIndex = line.lastIndexOf(';');
-        if (lastSemicolonIndex === -1) return line;
-
-        const prefix = line.substring(0, lastSemicolonIndex + 1);
-        let content = line.substring(lastSemicolonIndex + 1).trim();
-
-        if (content.startsWith('"') && content.endsWith('"')) {
-          let inner = content.substring(1, content.length - 1);
-          return prefix + '"' + inner.replace(/(?<!")"(?!")/g, '""') + '"';
-        }
-        return line;
-      });
-
-      this.manualImpexContent = fixedLines.join('\n');
-      console.log(this.manualImpexContent);
-      console.log(JSON.stringify(this.manualImpexContent.substring(0, 100)));
-      // 4. Force immediate DOM update
-      this.cdr.detectChanges();
-      // this.validateContent();
-    });
-  }
-
-
-  //   validateContent() {
-  //   const errors: { message: string, line: number, char: number }[] = [];
-  //   const lines = this.manualImpexContent.split('\n');
-
-  //   lines.forEach((line, index) => {
-  //     // 1. Skip non-data lines
-  //     if (!line.trim() || line.startsWith('#') || line.startsWith('$') || line.startsWith('INSERT_UPDATE')) return;
-
-  //     const lastSemicolonIndex = line.lastIndexOf(';');
-  //     if (lastSemicolonIndex === -1) return;
-
-  //     // Get everything after the last semicolon
-  //     let rawCell = line.substring(lastSemicolonIndex + 1).trim();
-
-  //     // 2. Extract the content by removing the outer wrapping quotes
-  //     // We only strip the first and last quote if they exist
-  //     let content = rawCell;
-  //     if (content.startsWith('"') && content.endsWith('"')) {
-  //       content = content.substring(1, content.length - 1);
-  //     }
-
-  //     // 3. Unescape internal quotes (replace "" with ") for the HTML parser
-  //     // This allows the DOMParser to see the real HTML attributes
-  //     content = content.replace(/""/g, '"');
-
-  //     // 4. Check for unescaped quotes (the ones that would break ImpEx)
-  //     const quoteRegex = /(?<!")"(?!")/g;
-  //     let match;
-  //     while ((match = quoteRegex.exec(content)) !== null) {
-  //       errors.push({ 
-  //         message: `Line ${index + 1}: Unescaped quote found inside HTML.`, 
-  //         line: index + 1, 
-  //         char: match.index 
-  //       });
-  //     }
-
-  //     // 5. Validate HTML structure
-  //     const parser = new DOMParser();
-  //     const doc = parser.parseFromString(content, 'text/html');
-  //     if (doc.getElementsByTagName('parsererror').length > 0) {
-  //       errors.push({ 
-  //         message: `Line ${index + 1}: Broken HTML (check for unclosed tags like <div> or <table>).`, 
-  //         line: index + 1, 
-  //         char: 0 
-  //       });
-  //     }
-  //   });
-
-  //   this.validationErrors = errors;
-  //   this.isImpExValid = errors.length === 0;
-  //   this.cdr.detectChanges();
-  // }
   downloadManualImpex() {
     if (!this.manualImpexContent) {
       alert('No content available to download.');

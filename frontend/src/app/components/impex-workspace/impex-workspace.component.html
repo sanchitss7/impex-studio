@@ -2,13 +2,12 @@
 
     <nav class="navbar navbar-dark bg-dark px-4 shadow-sm">
         <a class="navbar-brand fw-bold" href="#">
-            <i class="bi bi-gear-fill me-2 text-primary"></i>Hybris Impex Automation Tool
+            <i class="bi bi-gear-fill me-2 text-primary"></i>Impex Studio
         </a>
     </nav>
 
     <div class="container-fluid px-4 mt-4">
-        <ul
-            class=" navigation-tabs nav nav-pills gap-3 justify-content-start">
+        <ul class=" navigation-tabs nav nav-pills justify-content-center">
 
             <li class="nav-item">
                 <button class="nav-link fw-semibold px-4" [class.active]="activeWorkspaceMode === 'bulk'"
@@ -22,12 +21,6 @@
                     <i class="bi bi-view-list me-2"></i>Single Component Impex
                 </button>
             </li>
-            <!-- <li class="nav-item">
-                <button class="nav-link fw-semibold px-4" [class.active]="activeWorkspaceMode === 'bulk-generator'"
-                    (click)="activeWorkspaceMode = 'bulk-generator'">
-                    <i class="bi bi-gear-wide-connected me-2"></i>Bulk Impex Generator
-                </button>
-            </li> -->
         </ul>
     </div>
     <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1055;">
@@ -66,28 +59,30 @@
                             <input type="file" id="excel-uploader" accept=".xlsx, .xls, .csv"
                                 (change)="onFileSelected($event)" class="hidden-file-input" />
 
-                            <select [(ngModel)]="selectedLanguage"
+                            <select [disabled]="bannerGridData.length == 0" [(ngModel)]="selectedLanguage"
                                 class="form-select border-secondary-subtle fw-semibold lang-dropdown">
-                                <option *ngFor="let lang of languagesList" [value]="lang">
-                                    🌍 {{ lang }} Variant View
+                                <option *ngFor="let lang of languagesList" [ngValue]="lang">
+                                    EN &#8594; {{ lang }} Variant View
                                 </option>
                             </select>
+
                             <button class="btn btn-primary fw-bold px-4" (click)="translateSelectedRows()"
                                 [disabled]="!hasSelectedRows()">
-                               <i class="bi bi-translate me-1"></i> Translate Selected
+                                <i class="bi bi-translate me-1"></i> Translate Selected
                             </button>
                         </div>
                         <div class="d-flex">
 
                             <div class="d-flex justify-content-end">
-                                <button (click)="generateAndOpenModal()" class=" fw-bold px-3 py-2 btn btn-primary">
+                                <button (click)="generateAndOpenModal()" [disabled]="bannerGridData.length == 0"
+                                    class=" fw-bold px-3 py-2 btn btn-primary">
                                     <i class="bi bi-stars me-2"></i>Generate & Review
                                 </button>
 
                                 <div class="modal-overlay" *ngIf="showModal">
                                     <div class="modal-content full-screen-modal">
                                         <div class="modal-header">
-                                            <h5 class="modal-title">ImpEx Editor</h5>
+                                            <h5 class="modal-title">ImpEx Editor (Selected Lang: {{ selectedLanguage.toUpperCase() }})</h5>
                                             <button type="button" class="close"
                                                 (click)="showModal = false">&times;</button>
                                         </div>
@@ -96,7 +91,7 @@
                                             <div class="editor-side" style="width: 100%;">
                                                 <textarea #impexArea id="impex-review" [ngModel]="manualImpexContent"
                                                     (ngModelChange)="manualImpexContent = $event" class="form-control"
-                                                    style="font-family: monospace; height: 100%; resize: none;">
+                                                    style="font-family: monospace; height: 100%; resize: none; font-size: 12px;">
                                         </textarea>
                                             </div>
 
@@ -193,12 +188,6 @@
                             <h5 class="fw-bold mb-3 text-secondary">Configuration Workspace</h5>
 
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Impex Header Syntax:</label>
-                                <input type="text" [(ngModel)]="headerConfig"
-                                    class="form-control font-monospace border-secondary-subtle" />
-                            </div>
-
-                            <div class="mb-3">
                                 <label class="form-label fw-semibold">Component Target UID:</label>
                                 <input type="text" [(ngModel)]="uid"
                                     class="form-control font-monospace border-secondary-subtle" />
@@ -220,7 +209,7 @@
                             </div>
 
                             <button class="btn btn-primary fw-bold px-4 py-2 mt-2" (click)="generateSingleImpex()">
-                                <i class="bi bi-stars me-2"></i>Genrate & Review
+                                <i class="bi bi-stars me-2"></i>Generate & Review
                             </button>
                         </div>
 
@@ -241,13 +230,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </ng-container>
-    <ng-container *ngIf="activeWorkspaceMode === 'bulk-generator'">
-        <div class="container-fluid px-4">
-            <div class="card shadow-sm border border-secondary-subtle p-4 bg-white">
-                <app-bulk-generator></app-bulk-generator>
             </div>
         </div>
     </ng-container>
