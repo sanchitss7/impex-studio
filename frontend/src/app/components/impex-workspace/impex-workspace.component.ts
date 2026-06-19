@@ -6,8 +6,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { HostListener } from '@angular/core';
 import { NgZone } from '@angular/core';
-import { forkJoin, firstValueFrom, catchError, of, map } from 'rxjs';
-import { ImpexPayload } from '../../services/impex-api.service';
+import { forkJoin, firstValueFrom, map } from 'rxjs';
 
 interface BannerRow {
   originalContent: string;
@@ -27,30 +26,29 @@ interface BannerRow {
 })
 export class ImpexWorkspaceComponent {
   showScrollButton: boolean = false;
-  headerConfig: string = 'INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=$lang]';
+  headerConfig: string = 'INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content2[lang=$lang]';
   uid: string = 'HomepageWelcomeParagraph';
   outputResult: string = '';
   private deepLMap: Record<string, string> = {
-    'en': 'EN-US',
-    'en_gb': 'EN-GB',
-    'de': 'DE',
-    'fr': 'FR',
-    'es': 'ES',
-    'it': 'IT'
+    'EN': 'EN',
+    'DE': 'DE',
+    'FR': 'FR',
+    'ES': 'ES',
+    'IT': 'IT'
   };
-  languages: string[] = ['en', 'de', 'es', 'fr', 'it', 'en_GB'];
+
+  languages: string[] = ['EN', 'DE', 'ES', 'FR', 'IT'];
   contentMap: { [key: string]: string } = {
-    en: '<DIV CLASS="hero">Welcome "6-1100394-1"</DIV>',
-    de: '',
-    es: '',
-    fr: '',
-    it: '',
-    en_GB: ''
+    EN: '<DIV CLASS="hero">Welcome "6-1100394-1"</DIV>',
+    DE: '',
+    ES: '',
+    FR: '',
+    IT: '',
   };
   isDragging: boolean = false;
-  activeWorkspaceMode: 'single' | 'bulk' = 'bulk';
+  activeWorkspaceMode: 'single' | 'bulk' = 'single';
   selectedLanguage: string = 'DE';
-  languagesList: string[] = ['DE', 'ES', 'FR', 'IT', 'EN_GB'];
+  languagesList: string[] = ['DE', 'ES', 'FR', 'IT'];
   bannerGridData: BannerRow[] = [];
   masterCheckboxState: boolean = true;
   backendConnectionStatus: string = 'Connected to Backend: http://localhost:3000';
@@ -64,10 +62,11 @@ export class ImpexWorkspaceComponent {
 
   constructor(private apiService: ImpexApiService, private cdr: ChangeDetectorRef, private http: HttpClient, private zone: NgZone) { }
 
+
   // ... imports remain the same
   async generateAndOpenModal() {
     try {
-      const targetLang = this.deepLMap[this.selectedLanguage.toLowerCase()] || 'EN-GB';
+      const targetLang = this.deepLMap[this.selectedLanguage.toLowerCase()];
 
       // 1. Prepare translation requests
       const translationObservables = this.bannerGridData.map(row => {
@@ -77,8 +76,8 @@ export class ImpexWorkspaceComponent {
         const maskedText = textToTranslate.replace(idRegex, '###ID###');
 
         return this.http.post('http://localhost:3000/api/translate', {
-          text: maskedText,
-          target_lang: targetLang
+          text: row.content,
+          target_lang: this.selectedLanguage // Ensure this string is not null/undefined
         }).pipe(
           map((res: any) => {
             let translated = res.translatedText || maskedText;
@@ -110,8 +109,8 @@ export class ImpexWorkspaceComponent {
       const payload = {
         uid: this.uid,
         headerConfig: this.headerConfig,
-        rows: sanitizedRows, // Use the sanitized array
-        contentMap: {},
+        rows: sanitizedRows,
+        contentMap: {}, // <--- This might be your issue
         selectedLanguage: this.selectedLanguage
       };
 
@@ -121,8 +120,9 @@ export class ImpexWorkspaceComponent {
       const response: any = await firstValueFrom(
         this.http.post('http://localhost:3000/api/generate-impex', payload)
       );
+      console.log("DEBUG: Server response for ImpEx:", response);
+      this.manualImpexContent = response.impexData || response.content || JSON.stringify(response);
 
-      this.manualImpexContent = response.impexData || response.content;
       this.showModal = true;
       this.cdr.detectChanges();
 
@@ -223,7 +223,7 @@ export class ImpexWorkspaceComponent {
       uid: this.uid,
       contentMap: cleanContentMap,
       headerConfig: this.headerConfig,
-      selectedLanguage: 'en'
+      selectedLanguage: 'EN'
     };
 
     // Use 'this.apiService' (as defined in your constructor)
@@ -237,7 +237,11 @@ export class ImpexWorkspaceComponent {
     });
   }
 
-
+  private getTargetLang(lang: string): string {
+    // Use the map, fallback to input, force uppercase, ensure hyphen
+    const code = (this.deepLMap[lang] || lang).toUpperCase();
+    return code.replace('_', '-');
+  }
 
   private downloadFile(content: string, filename: string): void {
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
@@ -272,25 +276,28 @@ export class ImpexWorkspaceComponent {
     else console.log(`Audit Complete: ${issuesFound} issues identified.`);
   }
 
-  translateSelectedRows() {
+  async translateSelectedRows() {
     const selectedRows = this.bannerGridData.filter(row => row.selected);
     if (selectedRows.length === 0) return alert('Select rows.');
 
-    selectedRows.forEach(row => {
-      if (row.content) {
-        // Ensure 'this.selectedLanguage' matches your languagesList ['DE', 'ES', etc.]
-        this.apiService.autoTranslate(row.content, this.selectedLanguage).subscribe({
-          next: (res: any) => {
-            if (res.translatedText) {
-              row.content = res.translatedText;
-              this.cdr.detectChanges();
-            }
-          },
-          error: (err) => console.error("Translation failed:", err)
-        });
-      }
-    });
-  } private sanitizeContent(str: string): string {
+    const targetLang = this.getTargetLang(this.selectedLanguage);
+
+    const observables = selectedRows.map(row =>
+      this.apiService.autoTranslate(row.content, targetLang).pipe(
+        map(res => ({ ...row, content: res.translatedText || row.content }))
+      )
+    );
+
+    const updated = await firstValueFrom(forkJoin(observables));
+
+    // Update state immutably
+    this.bannerGridData = this.bannerGridData.map(row =>
+      updated.find(u => u.component_Id === row.component_Id) || row
+    );
+    this.cdr.detectChanges();
+  }
+
+  private sanitizeContent(str: string): string {
     if (!str) return '';
 
     // 1. Decode entities and apply character sanitization
@@ -350,11 +357,11 @@ export class ImpexWorkspaceComponent {
 
   resetSingleComponentForm() {
     this.uid = '';
-    this.contentMap = { en: '', de: '', es: '', fr: '', it: '', en_GB: '' };
+    this.contentMap = { en: '', de: '', es: '', fr: '', it: '' };
   }
 
   autoPopulateTranslations() {
-    const englishSource = this.contentMap['en'];
+    const englishSource = this.contentMap['EN'];
     if (!englishSource) {
       alert('Please provide English base content in the "en" field first!');
       return;
@@ -363,9 +370,6 @@ export class ImpexWorkspaceComponent {
     // Loop through defined languages
     this.languages.forEach(lang => {
       if (lang === 'en') return;
-
-      // Note: If your backend expects uppercase (DE, ES), ensure we convert it.
-      // Your list uses lowercase ['en', 'de', ...], so we pass the key directly.
       this.apiService.autoTranslate(englishSource, lang).subscribe({
         next: (res: any) => {
           if (res && res.translatedText) {
@@ -397,7 +401,7 @@ export class ImpexWorkspaceComponent {
       const cleanId = idMatch ? idMatch[0] : '';
 
       // 2. Inject ID as ""ID""
-      text = text.replace('###ID###', ' ""' + cleanId + '""');
+      text = text.replace('###ID###', '"' + cleanId + '"');
 
       // 3. Sanitize (This now handles tag lowercasing AND quote escaping)
       cleanContentMap[lang] = this.sanitizeContent(text);
@@ -406,7 +410,6 @@ export class ImpexWorkspaceComponent {
     const payload = {
       uid: this.uid,
       contentMap: cleanContentMap,
-      // Ensure the backend knows the language context
       selectedLanguage: this.selectedLanguage
     };
 
@@ -419,6 +422,7 @@ export class ImpexWorkspaceComponent {
       error: (err) => console.error("Error:", err)
     });
   }
+
   async copyBulkClipboard(text: string): Promise<void> {
     try {
       if (!text) {

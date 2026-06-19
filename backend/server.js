@@ -24,9 +24,11 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const getDisplayLang = (langCode) => {
     const map = {
-        'en_gb': 'en_UK',
+        'en_us': 'en_US',
         'de_de': 'de_DE',
         'fr_fr': 'fr_FR',
+        'it_it': 'it_IT',
+        'es_es': 'es_ES',
         // Add other mappings as needed
     };
     // If it's not in the map, default to uppercase or original
@@ -49,11 +51,12 @@ app.use((req, res, next) => {
 app.post('/api/translate', async (req, res) => {
     try {
         const { text, target_lang } = req.body;
+        
         if (!text) return res.status(400).json({ error: 'Text is required' });
 
-        // REMOVE the normalization map that strips locale info
-        // Pass the target_lang as-is (or ensure it's formatted as 'en-GB' instead of 'en_GB')
-        const formattedLang = target_lang.replace('_', '-');
+        // FIX: Check if target_lang exists before calling .replace()
+        const langValue = target_lang || 'en-GB'; 
+        const formattedLang = langValue.replace('_', '-');
 
         console.log(`DEBUG: Calling translation service with: ${formattedLang}`);
 
@@ -66,71 +69,23 @@ app.post('/api/translate', async (req, res) => {
     }
 });
 
-// app.post('/api/generate-impex', (req, res) => {
-//     try {
-//         const { uid, contentMap, rows } = req.body;
-
-//         // 1. Determine data source
-//         const dataToProcess = rows || contentMap;
-
-//         if (!dataToProcess) {
-//             return res.status(400).json({ error: "No data provided for ImpEx generation" });
-//         }
-
-//         const sapLangMap = { 'en': 'en', 'en_gb': 'en_UK', 'de': 'de_DE', 'fr': 'fr_FR', 'es': 'es_ES', 'it': 'it_IT' };
-
-//         const header = `$contentCatalog=omegaengineeringContentCatalog2\n$productCatalog=omegaengineeringProductCatalog\n$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]\n$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]\n\n`;
-
-//         // 2. Map data to standard format
-//         const lines = (Array.isArray(dataToProcess) ? dataToProcess : Object.keys(dataToProcess).map(lang => ({
-//             lang: lang,
-//             content: dataToProcess[lang],
-//             uid: uid // Single mode uses the provided global UID
-//         }))).map(item => {
-//             const langKey = (item.lang || 'en').toLowerCase();
-//             const resolvedLang = sapLangMap[langKey] || 'en';
-//             const currentUid = item.uid || uid; // Fallback to global if item.uid missing
-
-//             // 3. Sanitization
-//             // REPLACE your current sanitization block in server.js with ONLY this:
-//             let content = (item.content || '').toString();
-//             content = content.replace(/[\u201C\u201D\u201E\u201F]/g, '"');
-//             content = content.replace(/"/g, '""');
-
-//             return `INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=${resolvedLang}]\n;${uid};"${content}"`;
-//         }).join('\n\n');
-
-//         res.json({ impexData: header + lines });
-//     } catch (error) {
-//         console.error("CRITICAL BACKEND ERROR:", error);
-//         res.status(500).json({ error: "Failed to generate ImpEx", details: error.message });
-//     }
-// });
 app.post('/api/generate-impex', (req, res) => {
     try {
         const { uid, contentMap, rows } = req.body;
         const dataToProcess = rows || contentMap;
 
-        if (!dataToProcess) {
-            return res.status(400).json({ error: "No data provided" });
-        }
+        if (!dataToProcess) return res.status(400).json({ error: "No data provided" });
 
-        const sapLangMap = { 'en': 'en', 'en_gb': 'en_UK', 'de': 'de_DE', 'fr': 'fr_FR', 'es': 'es_ES', 'it': 'it_IT' };
+        const sapLangMap = { 'en': 'en_US', 'de': 'de_DE', 'fr': 'fr_FR', 'es': 'es_ES', 'it': 'it_IT' };
+        const macros = `$contentCatalog=omegaengineeringContentCatalog\n$productCatalog=omegaengineeringProductCatalog\n$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]\n$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]\n\n`;
 
-        // 1. Static Catalog Macros
-        const macros = `$contentCatalog=omegaengineeringContentCatalog2\n` +
-                       `$productCatalog=omegaengineeringProductCatalog\n` +
-                       `$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]\n` +
-                       `$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]\n\n`;
-
-        // 2. Normalize data into an array of objects
+        // Ensure we always have an array
         const items = Array.isArray(dataToProcess) ? dataToProcess : Object.keys(dataToProcess).map(lang => ({
             lang: lang,
             content: dataToProcess[lang],
             uid: uid
         }));
 
-        // 3. Group items by language
         const groupedByLang = items.reduce((acc, item) => {
             const langKey = (item.lang || 'en').toLowerCase();
             const resolvedLang = sapLangMap[langKey] || 'en';
@@ -139,24 +94,26 @@ app.post('/api/generate-impex', (req, res) => {
             return acc;
         }, {});
 
-        // 4. Build blocks: One header per language, followed by all rows for that language
+        // Build blocks with defensive checks
         const blocks = Object.keys(groupedByLang).map(lang => {
             const header = `INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=${lang}]\n`;
-            const rows = groupedByLang[lang].map(item => {
-                const content = (item.content || '').toString();
-                return `;${item.uid || uid};"${content}"`;
+
+            // Defensively map rows
+            const rowStrings = groupedByLang[lang].map(item => {
+                const safeUid = item.uid || uid || 'UnknownUID';
+                const safeContent = item.content || '';
+                return `;${safeUid};"${safeContent}"`;
             }).join('\n');
-            return header + rows;
+
+            return header + rowStrings;
         }).join('\n\n');
 
         res.json({ impexData: macros + blocks });
-        
     } catch (error) {
-        console.error("CRITICAL BACKEND ERROR:", error);
+        console.error("Backend Error Details:", error); // Terminal will show exactly why it failed
         res.status(500).json({ error: "Failed to generate ImpEx", details: error.message });
     }
 });
-
 // 2. BULK PROCESSING ROUTES
 app.post('/api/impex/bulk/upload', upload.single('file'), bulkController.parseBulkUpload);
 // Server Initialization

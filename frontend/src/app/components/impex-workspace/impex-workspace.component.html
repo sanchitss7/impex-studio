@@ -82,13 +82,15 @@
                                 <div class="modal-overlay" *ngIf="showModal">
                                     <div class="modal-content full-screen-modal">
                                         <div class="modal-header">
-                                            <h5 class="modal-title">ImpEx Editor (Selected Lang: {{ selectedLanguage.toUpperCase() }})</h5>
+                                            <h5 class="modal-title">ImpEx Editor (Selected Lang: {{
+                                                selectedLanguage.toUpperCase() }})</h5>
                                             <button type="button" class="close"
                                                 (click)="showModal = false">&times;</button>
                                         </div>
 
                                         <div class="modal-body editor-layout">
                                             <div class="editor-side" style="width: 100%;">
+                                                
                                                 <textarea #impexArea id="impex-review" [ngModel]="manualImpexContent"
                                                     (ngModelChange)="manualImpexContent = $event" class="form-control"
                                                     style="font-family: monospace; height: 100%; resize: none; font-size: 12px;">
@@ -143,24 +145,23 @@
                                         <input type="checkbox" class="form-check-input"
                                             [(ngModel)]="masterCheckboxState" (change)="toggleAllRows()" />
                                     </th>
-                                    <th scope="col" style="width:20%">Component UID</th>
+                                    <th scope="col" style="width:30%">Component UID</th>
                                     <th scope="col">Content [lang={{selectedLanguage}}]</th>
                                     <th scope="col" class="text-center actions-column-width">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-
                                 <tr *ngFor="let row of bannerGridData; let i = index">
                                     <td class="text-center">
                                         <input type="checkbox" class="form-check-input" [(ngModel)]="row.selected"
                                             (change)="checkRowParity()" />
                                     </td>
                                     <td style="width:20%">
-                                        <input type="text" class="form-control font-monospace fw-bold w-100"
+                                        <input type="text" [title]="row.component_Id" class="form-control font-monospace fw-bold w-100"
                                             [(ngModel)]="row.component_Id" />
                                     </td>
                                     <td>
-                                        <textarea class="form-control" [(ngModel)]="row.content" rows="4"></textarea>
+                                        <textarea class="form-control" [(ngModel)]="row.content" rows="5"></textarea>
                                     </td>
                                     <td class="text-center text-secondary fs-5">
                                         <i class="bi bi-trash cursor-pointer text-danger" (click)="deleteRow(i)"></i>
@@ -199,7 +200,7 @@
                                     <span class="badge bg-secondary text-uppercase py-2 px-3 fs-7">Language Variant: {{
                                         lang
                                         }}</span>
-                                    <button *ngIf="lang === 'en'" (click)="autoPopulateTranslations()"
+                                    <button *ngIf="lang === 'EN'" (click)="autoPopulateTranslations()"
                                         class="btn btn-sm btn-primary fw-bold">
                                         <i class="bi bi-translate me-1"></i>Auto-Translate to All Target Languages
                                     </button>
@@ -208,22 +209,51 @@
                                     class="form-control font-monospace border-secondary-subtle"></textarea>
                             </div>
 
-                            <button class="btn btn-primary fw-bold px-4 py-2 mt-2" (click)="generateSingleImpex()">
-                                <i class="bi bi-stars me-2"></i>Generate & Review
-                            </button>
+
                         </div>
 
                         <div class="col-lg-6 py-2">
                             <h5 class="fw-bold mb-3 text-secondary">Compiled Output Stream</h5>
-                            <div class="mb-3 d-flex gap-2">
-                                <button [disabled]="!outputResult" class="btn btn-outline-dark fw-semibold"
-                                    (click)="copyToClipboard()">
-                                    <i class="bi bi-copy me-2"></i>Copy impex
-                                </button>
-                                <button [disabled]="!outputResult" class="btn btn-success fw-bold"
-                                    (click)="downloadImpexFile()">
-                                    <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .impex File
-                                </button>
+                            <!-- <div class="row">
+                                <div class="mb-3 d-flex gap-2">
+                                    <button [disabled]="!outputResult" class="btn fw-bold btn-sm btn-outline-dark fw-semibold"
+                                        (click)="copyToClipboard()">
+                                        <i class="bi bi-copy me-2"></i>Copy impex
+                                    </button>
+                                    <button [disabled]="!outputResult" class="btn btn-sm btn-success fw-bold"
+                                        (click)="downloadImpexFile()">
+                                        <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .impex File
+                                    </button>
+                                </div>
+                                <div class="mb-3 d-flex gap-2">
+                                    <button class="btn btn-primary btn-sm fw-bold mt-2"
+                                        (click)="generateSingleImpex()">
+                                        <i class="bi bi-stars me-2"></i>Generate & Review
+                                    </button>
+                                </div>
+
+                            </div> -->
+                            <div class="row">
+                                <div class="col-12 d-flex justify-content-between align-items-center mb-3">
+
+                                    <div>
+                                        <button class="btn btn-primary btn-sm fw-bold" (click)="generateSingleImpex()">
+                                            <i class="bi bi-stars me-2"></i>Generate & Review
+                                        </button>
+                                    </div>
+
+                                    <div class="d-flex gap-2">
+                                        <button [disabled]="!outputResult" class="btn btn-sm btn-outline-dark fw-bold"
+                                            (click)="copyToClipboard()">
+                                            <i class="bi bi-copy me-2"></i>Copy impex
+                                        </button>
+                                        <button [disabled]="!outputResult" class="btn btn-sm btn-success fw-bold"
+                                            (click)="downloadImpexFile()">
+                                            <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .impex File
+                                        </button>
+                                    </div>
+
+                                </div>
                             </div>
                             <pre
                                 class="bg-dark text-light p-3 rounded border shadow-sm font-monospace position-relative terminal-viewport"><code>{{ outputResult || 'No generated code block compiled yet.' }}</code></pre>

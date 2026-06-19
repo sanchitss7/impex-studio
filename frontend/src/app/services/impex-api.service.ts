@@ -2,17 +2,17 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-// export interface ImpexPayload {
-//   headerConfig: string;
-//   uid: string;
-//   contentMap: { [key: string]: string };
-//   target_lang?: string;
-// }
-
 export interface ImpexPayload {
+  headerConfig: string;
   uid: string;
   contentMap: { [key: string]: string };
+  target_lang?: string;
 }
+
+// export interface ImpexPayload {
+//   uid: string;
+//   contentMap: { [key: string]: string };
+// }
 
 @Injectable({
   providedIn: 'root'
@@ -41,7 +41,7 @@ export class ImpexApiService {
 
   autoTranslate(text: string, lang: string): Observable<any> {
     const langMap: { [key: string]: string } = {
-      'en_UK': 'en', 'DE': 'de', 'ES': 'es', 'FR': 'fr', 'IT': 'it'
+      'DE': 'de', 'ES': 'es', 'FR': 'fr', 'IT': 'it'
     };
     // Force the mapping here
     const normalizedLang = langMap[lang.toUpperCase()] || lang.toLowerCase();
