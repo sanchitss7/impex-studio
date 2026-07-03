@@ -139,6 +139,9 @@ export class ImpexWorkspaceComponent {
       this.manualImpexContent = response.impexData;
       this.htmlPreview = response.htmlContent;
       this.showModal = true;
+
+      this.impexData = response.impexData;
+      this.htmlPreview = response.htmlContent;
       this.cdr.detectChanges();
 
 
@@ -501,8 +504,22 @@ export class ImpexWorkspaceComponent {
   }
 
   downloadHtml() {
+    if (!this.htmlPreview) {
+      alert("No HTML preview available.");
+      return;
+    }
+
+    // Create a dynamic filename based on the active mode
+    const mode = this.activeWorkspaceMode; // 'bulk' or 'single'
+    const filename = `${mode}_preview_${new Date().getTime()}.html`;
+
     const blob = new Blob([this.htmlPreview], { type: 'text/html' });
-    this.triggerDownload(blob, `preview_${this.uid}.html`);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
   }
 
   private triggerDownload(blob: Blob, filename: string) {

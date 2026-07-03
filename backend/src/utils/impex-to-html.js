@@ -1,39 +1,44 @@
 /**
- * Converts ImpEx rows to an HTML file structure.
- * @param {string} impexContent - The raw ImpEx string.
- * @param {string} lang - The language code (e.g., 'it_IT').
+ * Converts ImpEx rows to an HTML file structure with Google Sans font.
  */
 function convertImpexToHtml(impexContent, lang) {
     if (!impexContent) return "";
     
     const lines = impexContent.split('\n');
+    let currentLang = lang || 'EN';
+    
     let htmlOutput = `<!DOCTYPE html>
-<html lang="${lang ? lang.split('_')[0] : 'en'}">
+<html lang="${currentLang.split('_')[0]}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${lang} Translation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: "Google Sans", sans-serif; padding: 20px; line-height: 1.6; }
+        h3 { color: #333; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 20px; }
+        .content-box { margin-bottom: 30px; }
+    </style>
 </head>
 <body>\n`;
 
     lines.forEach(line => {
-        // Skip header lines or empty lines
-        if (!line.trim() || line.startsWith('INSERT_UPDATE') || line.startsWith('$')) return;
+        if (line.startsWith('INSERT_UPDATE')) {
+            const langMatch = line.match(/content\[lang=([^\]]+)\]/);
+            if (langMatch && langMatch[1]) currentLang = langMatch[1];
+            return;
+        }
 
-        // Parse: ;uid;content
+        if (!line.trim() || line.startsWith('$')) return;
+
         const parts = line.split(';');
         if (parts.length >= 3) {
-            const uid = parts[1]; // Get UID
-            // Join parts from index 2 onwards to ensure content with semicolons is kept intact
+            const uid = parts[1];
             let content = parts.slice(2).join(';'); 
-            
-            // Clean up double-double quotes for standard HTML display
-            content = content.replace(/""/g, '"');
-            
-            // Remove leading/trailing quotes if the ImpEx wrapped the whole content
-            content = content.replace(/^"|"$/g, '');
-
-            htmlOutput += `<hr><br><h3>${uid}</h3>\n${content}\n\n`;
+            content = content.replace(/""/g, '"').replace(/^"|"$/g, '');
+            htmlOutput += `<div class="content-box"><h3>${uid} (${currentLang})</h3>\n${content}</div>\n\n`;
         }
     });
 
