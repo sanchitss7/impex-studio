@@ -41,7 +41,7 @@ export class ImpexApiService {
 
   autoTranslate(text: string, lang: string): Observable<any> {
     const langMap: { [key: string]: string } = {
-      'DE': 'de', 'ES': 'es', 'FR': 'fr', 'IT': 'it'
+      'DE': 'de', 'ES': 'es', 'FR': 'fr', 'IT': 'it', 'JA': 'ja', 'KO': 'ko'
     };
     // Force the mapping here
     const normalizedLang = langMap[lang.toUpperCase()] || lang.toLowerCase();

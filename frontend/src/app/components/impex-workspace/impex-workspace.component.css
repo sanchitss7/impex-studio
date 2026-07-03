@@ -272,3 +272,13 @@ small.badge.bg-primary.rounded-pill.ms-2 {
   border-bottom: none;
   color: #0d6efd;
 }
+
+.progressCount {
+    position: absolute;
+    right: 30px;
+    top: 23px;
+    font-size: 42px;
+    font-weight: 700;
+    font-family: monospace;
+    color: #d8d8d8;
+}

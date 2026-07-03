@@ -5,10 +5,10 @@ const multer = require('multer');
 const compression = require('compression');
 
 // Core isolated controller/service module imports
-const impexController = require('./controllers/impex.controller');
-const bulkController = require('./controllers/bulk.controller');
-const impexService = require('./services/impex.service');
-const translationService = require('./services/translation.service'); // Ensure this exists!
+const impexController = require('./src/controllers/impex.controller');
+const bulkController = require('./src/controllers/bulk.controller');
+const impexService = require('./src/services/impex.service');
+const translationService = require('./src/services/translation.service'); // Ensure this exists!
 
 const app = express();
 const PORT = 3000;
@@ -34,7 +34,7 @@ const getDisplayLang = (langCode) => {
     // If it's not in the map, default to uppercase or original
     return map[langCode.toLowerCase()] || langCode.toUpperCase();
 };
-
+app.post('/api/generate-impex', impexController.generateImpex);
 // Logging Middleware
 app.use((req, res, next) => {
     console.log(`Requested URL: ${req.url} | Method: ${req.method}`);
@@ -55,7 +55,7 @@ app.post('/api/translate', async (req, res) => {
         if (!text) return res.status(400).json({ error: 'Text is required' });
 
         // FIX: Check if target_lang exists before calling .replace()
-        const langValue = target_lang || 'en-GB'; 
+        const langValue = target_lang; 
         const formattedLang = langValue.replace('_', '-');
 
         console.log(`DEBUG: Calling translation service with: ${formattedLang}`);
@@ -76,7 +76,7 @@ app.post('/api/generate-impex', (req, res) => {
 
         if (!dataToProcess) return res.status(400).json({ error: "No data provided" });
 
-        const sapLangMap = { 'en': 'en_US', 'de': 'de_DE', 'fr': 'fr_FR', 'es': 'es_ES', 'it': 'it_IT' };
+        const sapLangMap = { 'en': 'en_US', 'de': 'de_DE', 'fr': 'fr_FR', 'es': 'es_ES', 'it': 'it_IT', 'ja': 'ja_JA', 'ko': 'ko_KO' };
         const macros = `$contentCatalog=omegaengineeringContentCatalog\n$productCatalog=omegaengineeringProductCatalog\n$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]\n$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default='Staged'])[unique=true,default=$productCatalog:Staged]\n\n`;
 
         // Ensure we always have an array
@@ -114,6 +114,7 @@ app.post('/api/generate-impex', (req, res) => {
         res.status(500).json({ error: "Failed to generate ImpEx", details: error.message });
     }
 });
+
 // 2. BULK PROCESSING ROUTES
 app.post('/api/impex/bulk/upload', upload.single('file'), bulkController.parseBulkUpload);
 // Server Initialization
