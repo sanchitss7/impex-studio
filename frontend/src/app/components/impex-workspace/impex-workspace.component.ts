@@ -62,23 +62,16 @@ export class ImpexWorkspaceComponent {
   isLoading: boolean = false;
   showModal: boolean = false;
   manualImpexContent: string = '';
-  textWrapEnabled: boolean = true;
   // validationErrors: { message: string, line: number, char: number }[] = [];
   isImpExValid: boolean = false;
   lastGeneratedFileLog: string = 'No files generated yet';
   progressPercentage: number = 0;
   catalogState: 'Staged' | 'Online' = 'Staged';
+  toasts: { message: string, type: 'success' | 'danger' }[] = [];
 
   constructor(private apiService: ImpexApiService, private cdr: ChangeDetectorRef, private http: HttpClient, private zone: NgZone) { }
 
-  ngOnInit() {
-    this.http.get('http://localhost:3000/api/test').subscribe(
-      data => console.log("Success:", data),
-      err => console.error("Connection Failed:", err)
-    );
-  }
 
-  // ... imports remain the same
   openPreviewModal() {
     if (this.manualImpexContent) {
       this.showModal = true;
@@ -149,14 +142,28 @@ export class ImpexWorkspaceComponent {
       // Notification for the user
       console.log("Generation complete. Click 'Review Translations' to edit.");
       this.cdr.detectChanges();
-
+      this.showToast("Translation complete and ImpEx generated.", "success");
     } catch (err) {
-      console.error("Critical Generation Error:", err);
+      this.showToast("Generation failed.", "danger");
     } finally {
       this.isLoading = false;
       this.cdr.detectChanges();
     }
   }
+
+  showToast(message: string, type: 'success' | 'danger' = 'success') {
+    const toast = { message, type };
+    this.toasts.push(toast);
+    this.cdr.detectChanges();
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+      this.toasts = this.toasts.filter(t => t !== toast);
+      this.cdr.detectChanges();
+    }, 3000);
+  }
+
+
   toggleCatalogState() {
     const previousState = this.catalogState;
     this.catalogState = (previousState === 'Staged') ? 'Online' : 'Staged';
@@ -192,30 +199,31 @@ export class ImpexWorkspaceComponent {
     this.isDragging = true;
   }
 
-  exportHtml() {
+  // exportHtml() {
 
-    const content = this.outputResult;
+  //   const content = this.outputResult;
 
-    if (!content) {
-      alert("No content available to export.");
-      return;
-    }
+  //   if (!content) {
+  //     alert("No content available to export.");
+  //     return;
+  //   }
 
-    // 2. Create a Blob from the content
-    const blob = new Blob([content], { type: 'text/html' });
+  //   // 2. Create a Blob from the content
+  //   const blob = new Blob([content], { type: 'text/html' });
 
-    // 3. Create a download link
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `translation_${this.selectedLanguage}.html`;
+  //   // 3. Create a download link
+  //   const url = window.URL.createObjectURL(blob);
+  //   const a = document.createElement('a');
+  //   a.href = url;
+  //   a.download = `translation_${this.selectedLanguage}.html`;
 
-    // 4. Trigger download and cleanup
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  }
+  //   // 4. Trigger download and cleanup
+  //   document.body.appendChild(a);
+  //   a.click();
+  //   document.body.removeChild(a);
+  //   window.URL.revokeObjectURL(url);
+  // }
+
   onDragLeave(event: DragEvent) {
     event.preventDefault();
     this.isDragging = false;
@@ -297,24 +305,12 @@ export class ImpexWorkspaceComponent {
         this.outputResult = res.impexData; // Sync for the <pre> block
         this.htmlPreview = res.htmlContent || ''; // Store the HTML
         this.cdr.detectChanges();
-        console.log("DEBUG: htmlPreview length is now:", this.htmlPreview.length);
+        this.showToast("ImpEx generated successfully.", "success");
       }
     });
-
-    // this.apiService.buildUnifiedImpex(payload).subscribe({
-    //   next: (res: any) => {
-    //     console.log("Full Backend Response:", res); // ADD THIS
-    //     this.impexData = res.impexData;
-    //     this.htmlPreview = res.htmlContent;
-    //     this.cdr.detectChanges();
-    //   },
-    //   error: (err) => console.error("Generation Error:", err)
-    // });
-
   }
 
   private getTargetLang(lang: string): string {
-    // Use the map, fallback to input, force uppercase, ensure hyphen
     const code = (this.deepLMap[lang] || lang).toUpperCase();
     return code.replace('_', '-');
   }
@@ -329,28 +325,28 @@ export class ImpexWorkspaceComponent {
     window.URL.revokeObjectURL(url);
   }
 
-  auditImpExContent() {
-    const lines = this.manualImpexContent.split('\n');
-    const unescapedRegex = /(?<!")"(?!")/g; // Matches single " but ignores ""
-    let issuesFound = 0;
+  // auditImpExContent() {
+  //   const lines = this.manualImpexContent.split('\n');
+  //   const unescapedRegex = /(?<!")"(?!")/g; // Matches single " but ignores ""
+  //   let issuesFound = 0;
 
-    console.log("--- Starting ImpEx Integrity Audit ---");
+  //   console.log("--- Starting ImpEx Integrity Audit ---");
 
-    lines.forEach((line, index) => {
-      if (!line.includes(';')) return;
+  //   lines.forEach((line, index) => {
+  //     if (!line.includes(';')) return;
 
-      // Only check the content portion after the last semicolon
-      const content = line.substring(line.lastIndexOf(';') + 1);
+  //     // Only check the content portion after the last semicolon
+  //     const content = line.substring(line.lastIndexOf(';') + 1);
 
-      if (unescapedRegex.test(content)) {
-        console.warn(`Line ${index + 1}: Found potential unescaped double quote.`);
-        issuesFound++;
-      }
-    });
+  //     if (unescapedRegex.test(content)) {
+  //       console.warn(`Line ${index + 1}: Found potential unescaped double quote.`);
+  //       issuesFound++;
+  //     }
+  //   });
 
-    if (issuesFound === 0) console.log("Audit Passed: No unescaped quotes found.");
-    else console.log(`Audit Complete: ${issuesFound} issues identified.`);
-  }
+  //   if (issuesFound === 0) console.log("Audit Passed: No unescaped quotes found.");
+  //   else console.log(`Audit Complete: ${issuesFound} issues identified.`);
+  // }
 
   async translateSelectedRows() {
     const selectedRows = this.bannerGridData.filter(row => row.selected);
@@ -428,10 +424,10 @@ export class ImpexWorkspaceComponent {
 
   updateTranslation(lang: string, value: string) { this.contentMap[lang] = value; }
 
-  resetSingleComponentForm() {
-    this.uid = '';
-    this.contentMap = { en: '', de: '', es: '', fr: '', it: '', ja: '', ko: '' };
-  }
+  // resetSingleComponentForm() {
+  //   this.uid = '';
+  //   this.contentMap = { en: '', de: '', es: '', fr: '', it: '', ja: '', ko: '' };
+  // }
 
   autoPopulateTranslations() {
     const englishSource = this.contentMap['EN'];
@@ -440,27 +436,46 @@ export class ImpexWorkspaceComponent {
       return;
     }
 
-    // Loop through defined languages
-    this.languages.forEach(lang => {
-      if (lang === 'en') return;
+    // Filter languages to translate (exclude 'EN')
+    const targetLangs = this.languages.filter(lang => lang !== 'EN');
+    let completedCount = 0;
+    let hasError = false;
+
+    targetLangs.forEach(lang => {
       this.apiService.autoTranslate(englishSource, lang).subscribe({
         next: (res: any) => {
           if (res && res.translatedText) {
-            // CRITICAL: Create a new object reference to trigger Angular change detection
             this.contentMap = {
               ...this.contentMap,
               [lang]: res.translatedText
             };
             this.cdr.detectChanges();
           }
+
+          completedCount++;
+          // Check if this was the last language
+          if (completedCount === targetLangs.length) {
+            if (!hasError) {
+              this.showToast("All languages translated successfully!", "success");
+            } else {
+              this.showToast("Some translations failed. Please check console.", "danger");
+            }
+          }
         },
+
         error: (err) => {
           console.error(`Translation failed for ${lang}:`, err);
+          hasError = true;
+          completedCount++;
+
+          // Even on error, check if this was the final request to trigger the toast
+          if (completedCount === targetLangs.length) {
+            this.showToast("Some translations failed. Please check console.", "danger");
+          }
         }
       });
     });
   }
-
 
   processImpex() {
     const cleanContentMap: { [key: string]: string } = {};
@@ -498,26 +513,27 @@ export class ImpexWorkspaceComponent {
 
   async copyBulkClipboard(text: string): Promise<void> {
     try {
-      if (!text) {
-        alert("No content to copy!");
-        return;
-      }
+      // if (!text) {
+      //   this.showToast("No content to copy!", "danger");
+      //   return;
+      // }
       await navigator.clipboard.writeText(text);
-      alert('ImpEx content copied to clipboard!');
+      this.showToast("ImpEx copied to clipboard!", "success");
     } catch (err) {
       console.error('Failed to copy: ', err);
-      alert('Failed to copy content. Check console for errors.');
+      this.showToast("Failed to copy content.", "danger");
     }
   }
 
   copyToClipboard() {
     navigator.clipboard.writeText(this.outputResult);
-    alert('Copied to clipboard!');
+    this.showToast("ImpEx copied to clipboard!", "success");
   }
 
   downloadImpexFile() {
     if (this.outputResult) {
       this.downloadFile(this.outputResult, `import_${new Date().getTime()}.impex`);
+      this.showToast("ImpEx file downloaded successfully.", "success");
     }
   }
 
@@ -538,16 +554,17 @@ export class ImpexWorkspaceComponent {
     a.download = filename;
     a.click();
     window.URL.revokeObjectURL(url);
+    this.showToast("HTML file downloaded successfully.", "success");
   }
 
-  private triggerDownload(blob: Blob, filename: string) {
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  }
+  // private triggerDownload(blob: Blob, filename: string) {
+  //   const url = window.URL.createObjectURL(blob);
+  //   const a = document.createElement('a');
+  //   a.href = url;
+  //   a.download = filename;
+  //   a.click();
+  //   window.URL.revokeObjectURL(url);
+  // }
 
   downloadManualImpex() {
     if (!this.manualImpexContent) {
@@ -568,6 +585,7 @@ export class ImpexWorkspaceComponent {
 
     // Clean up
     window.URL.revokeObjectURL(url);
+    this.showToast("ImpEx file downloaded successfully.", "success");
   }
 
   jumpToError(line: number, char: number) {
@@ -620,6 +638,7 @@ export class ImpexWorkspaceComponent {
             selected: true
           }));
           this.cdr.detectChanges();
+          this.showToast("Spreadsheet uploaded successfully!", "success");
         }
       },
       error: (err) => {
