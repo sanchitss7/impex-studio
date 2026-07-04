@@ -9,10 +9,6 @@ export interface ImpexPayload {
   target_lang?: string;
 }
 
-// export interface ImpexPayload {
-//   uid: string;
-//   contentMap: { [key: string]: string };
-// }
 
 @Injectable({
   providedIn: 'root'

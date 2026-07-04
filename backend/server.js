@@ -1,10 +1,10 @@
+console.log("!!! SERVER IS STARTING AND LOADING SERVICES !!!");
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const compression = require('compression');
 
-// Core isolated controller/service module imports
 const impexController = require('./src/controllers/impex.controller');
 const bulkController = require('./src/controllers/bulk.controller');
 const impexService = require('./src/services/impex.service');

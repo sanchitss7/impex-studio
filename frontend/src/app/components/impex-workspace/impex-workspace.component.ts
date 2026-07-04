@@ -15,6 +15,7 @@ interface BannerRow {
   description: string;
   selected?: boolean;
   outputResult: string;
+  isTranslated?: boolean;
 }
 
 @Component({
@@ -66,6 +67,8 @@ export class ImpexWorkspaceComponent {
   isImpExValid: boolean = false;
   lastGeneratedFileLog: string = 'No files generated yet';
   progressPercentage: number = 0;
+  catalogState: 'Staged' | 'Online' = 'Staged';
+
   constructor(private apiService: ImpexApiService, private cdr: ChangeDetectorRef, private http: HttpClient, private zone: NgZone) { }
 
   ngOnInit() {
@@ -76,59 +79,62 @@ export class ImpexWorkspaceComponent {
   }
 
   // ... imports remain the same
+  openPreviewModal() {
+    if (this.manualImpexContent) {
+      this.showModal = true;
+      this.cdr.detectChanges();
+    } else {
+      alert("No content generated yet. Please click 'Generate ImpEx' first.");
+    }
+  }
+
+  // 2. Refactored Generate method (no longer forces showModal = true)
   async generateAndOpenModal() {
     this.isLoading = true;
-    this.progressPercentage = 0; // Initialize
+    this.progressPercentage = 0;
     this.cdr.detectChanges();
 
     try {
       const totalItems = this.bannerGridData.length;
       let completedItems = 0;
 
-      // 1. Prepare translation observables with progress tracking
-      const translationObservables = this.bannerGridData.map(row => {
-        // const idRegex = /"\d+-\d+-\d+"/g;
+      const processedRows = await Promise.all(this.bannerGridData.map(async (row) => {
+        if (row.isTranslated && row.content) {
+          completedItems++;
+          this.progressPercentage = Math.round((completedItems / totalItems) * 100);
+          return row;
+        }
+
         const idRegex = /["'«»“”„‟"' ]\d+-\d+-\d+["'«»“”„‟"' ]/g;
         const match = (row.originalContent || row.content).match(idRegex);
-        const maskedText = (row.originalContent || row.content).replace(idRegex, '###ID###');
-
-        return this.http.post('http://localhost:3000/api/translate', {
-          text: row.content,
-          target_lang: this.selectedLanguage
-        }).pipe(
-          map((res: any) => {
-            // Progress Calculation
-            completedItems++;
-            this.progressPercentage = Math.round((completedItems / totalItems) * 100);
-            this.cdr.detectChanges(); // Update UI for each item
-            let translated = res.translatedText || maskedText;
-            // if(this.progressPercentage == 100){
-            //   this.progressPercentage = 0;
-            // }
-            translated = translated.replace(/[«»“”„‟" ]*###ID###[«»“”„‟" ]*/g, '###ID###');
-            const cleanId = match?.[0]?.replace(/[^\d-]/g, '') || '';
-            const finalContent = match ? translated.replace('###ID###', ' "' + cleanId + '"') : translated;
-
-            return { ...row, content: finalContent };
+        const res: any = await firstValueFrom(
+          this.http.post('http://localhost:3000/api/translate', {
+            text: row.content,
+            target_lang: this.selectedLanguage
           })
         );
-      });
 
-      // 2. Execute translations
-      const translatedRows = await firstValueFrom(forkJoin(translationObservables));
+        completedItems++;
+        this.progressPercentage = Math.round((completedItems / totalItems) * 100);
+        this.cdr.detectChanges();
 
-      // 3. Finalize
-      const sanitizedRows = translatedRows.map(row => ({
-        uid: row.component_Id,
-        lang: this.selectedLanguage.toLowerCase(),
-        content: this.sanitizeContent(row.content)
+        let translated = res.translatedText;
+        const cleanId = match?.[0]?.replace(/[^\d-]/g, '') || '';
+        const finalContent = match ? translated.replace('###ID###', ' "' + cleanId + '"') : translated;
+
+        return { ...row, content: finalContent, isTranslated: true };
       }));
+
+      this.bannerGridData = processedRows;
 
       const payload = {
         uid: this.uid,
         headerConfig: this.headerConfig,
-        rows: sanitizedRows,
-        contentMap: {},
+        rows: this.bannerGridData.map(row => ({
+          uid: row.component_Id,
+          lang: this.selectedLanguage.toLowerCase(),
+          content: this.sanitizeContent(row.content)
+        })),
         selectedLanguage: this.selectedLanguage
       };
 
@@ -138,22 +144,34 @@ export class ImpexWorkspaceComponent {
 
       this.manualImpexContent = response.impexData;
       this.htmlPreview = response.htmlContent;
-      this.showModal = true;
-
       this.impexData = response.impexData;
-      this.htmlPreview = response.htmlContent;
-      this.cdr.detectChanges();
 
+      // Notification for the user
+      console.log("Generation complete. Click 'Review Translations' to edit.");
+      this.cdr.detectChanges();
 
     } catch (err) {
       console.error("Critical Generation Error:", err);
     } finally {
       this.isLoading = false;
-      this.progressPercentage = 0;
       this.cdr.detectChanges();
     }
   }
+  toggleCatalogState() {
+    const previousState = this.catalogState;
+    this.catalogState = (previousState === 'Staged') ? 'Online' : 'Staged';
 
+    // Use a global regex to replace ALL instances in the ImpEx content
+    const regex = new RegExp(previousState, 'g');
+
+    if (this.activeWorkspaceMode === 'single') {
+      this.outputResult = this.outputResult.replace(regex, this.catalogState);
+    } else {
+      this.manualImpexContent = this.manualImpexContent.replace(regex, this.catalogState);
+    }
+
+    this.cdr.detectChanges();
+  }
 
   private decodeHtmlEntities(str: string): string {
     if (!str) return '';

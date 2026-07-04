@@ -1,4 +1,5 @@
 const XLSX = require('xlsx');
+const { sanitizeContent } = require('../services/impex.service');
 
 /**
  * Ingests a multipart Form-Data Excel/CSV binary buffer, parses sheet keys,
@@ -15,7 +16,7 @@ exports.parseBulkUpload = async (req, res) => {
         const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-       
+        
         // Convert sheet to JSON array
         const rawRows = XLSX.utils.sheet_to_json(worksheet);
 
@@ -23,20 +24,27 @@ exports.parseBulkUpload = async (req, res) => {
             return res.status(400).json({ error: "The uploaded file is empty." });
         }
 
-        // DYNAMIC MAPPING: Case-insensitive lookups
+        // DYNAMIC MAPPING: Clean and sanitize row-by-row
         const parsedGridData = rawRows.map((row, index) => {
-            // Normalize keys to lowercase for comparison
             const normalizedRow = Object.keys(row).reduce((acc, key) => {
                 acc[key.toLowerCase()] = row[key];
                 return acc;
             }, {});
 
+            // Extract values
+            const rawComponentId = normalizedRow['component_id'];
+            const rawContent = normalizedRow['content'] || "";
+
+            // SANITIZE HERE: Apply your helper to each cell's content
+            const cleanedContent = sanitizeContent(String(rawContent).trim());
+
             return {
                 selected: true,
-                component_Id: normalizedRow['component_id'] !== undefined ? String(normalizedRow['component_id']).trim() : `UNASSIGNED_ID_${index + 1}`,
-                content: normalizedRow['content'] !== undefined ? String(normalizedRow['content']).trim() : ""
+                component_Id: rawComponentId !== undefined ? String(rawComponentId).trim() : `UNASSIGNED_ID_${index + 1}`,
+                content: cleanedContent 
             };
         });
+
         return res.status(200).json({
             success: true,
             totalRowsProcessed: parsedGridData.length,

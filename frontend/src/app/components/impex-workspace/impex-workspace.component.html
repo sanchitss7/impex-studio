@@ -53,7 +53,7 @@
                     <div class="progressCount" *ngIf="isLoading">{{ progressPercentage }}%</div>
                     <div
                         style="width: 100%; background-color: #ededed; height: 2px; border-radius: 5px; margin: 25px 0 15px 0;">
-                        <div [style.width.%]="progressPercentage"
+                        <div [style.width.%]="progressPercentage" *ngIf="isLoading"
                             style="height: 100%; border-radius: 5px; transition: width 0.3s ease;" class="bg-primary">
                         </div>
                     </div>
@@ -73,19 +73,24 @@
                                     EN &#8594; {{ lang }} Variant View
                                 </option>
                             </select>
-
-                            <!-- <button class="btn btn-primary fw-bold px-4" (click)="translateSelectedRows()"
-                                [disabled]="!hasSelectedRows()">
-                                <i class="bi bi-translate me-1"></i> Translate Selected
-                            </button> -->
                         </div>
                         <div class="d-flex">
 
                             <div class="d-flex justify-content-end">
-                                <button (click)="generateAndOpenModal()" [disabled]="bannerGridData.length == 0"
-                                    class=" fw-bold px-3 py-2 btn btn-primary">
-                                    <i class="bi bi-stars me-2"></i> Generate & Review
-                                </button>
+                                <!-- Inside your button group -->
+                                <div class="d-flex gap-2">
+                                    <!-- Generate Button -->
+                                    <button (click)="generateAndOpenModal()" [disabled]="bannerGridData.length == 0"
+                                        class="fw-bold px-3 py-2 btn btn-primary">
+                                        <i class="bi bi-translate me-2"></i>Translate
+                                    </button>
+
+                                    <!-- New Review Button (only shows if we have content) -->
+                                    <button (click)="openPreviewModal()" [disabled]="!manualImpexContent"
+                                        class="fw-bold px-3 py-2 btn btn-outline-secondary">
+                                        <i class="bi bi-eye me-2"></i>Review ImpEx
+                                    </button>
+                                </div>
 
 
                                 <div class="modal-overlay" *ngIf="showModal">
@@ -99,35 +104,38 @@
 
                                         <div class="modal-body editor-layout">
                                             <div class="editor-side" style="width: 100%;">
-
                                                 <textarea #impexArea id="impex-review" [ngModel]="manualImpexContent"
                                                     (ngModelChange)="manualImpexContent = $event" class="form-control"
-                                                    style="font-family: monospace; height: 100%; resize: none; font-size: 12px;">
-                                        </textarea>
+                                                    style="font-family: monospace; height: 100%; resize: none; white-space: wrap; font-size: 12px;">
+                                                </textarea>
                                             </div>
 
                                         </div>
                                         <div class="modal-footer d-flex justify-content-between px-3">
                                             <div class="toolbar">
-                                                <!-- <button (click)="fixImpExSyntax()" class="btn btn-primary">Fix Syntax
-                                            Errors</button> -->
                                                 <button (click)="copyBulkClipboard(impexArea.value)"
-                                                    class="btn btn-outline-dark fw-semibold">
-                                                    <i class="bi bi-copy me-2"></i>Copy Impex
+                                                    class="btn btn-sm btn-outline-dark fw-semibold">
+                                                    <i class="bi bi-copy me-2"></i>Copy
                                                 </button>
                                             </div>
 
                                             <div class="download_imp">
-                                                <!-- Inside modal-footer -->
-                                                <!-- Temporary debug label -->
-                                                <button class="btn btn-primary me-2" [disabled]="!htmlPreview"
-                                                    (click)="downloadHtml()">
-                                                    Download HTML File
+                                                <input type="checkbox" class="btn-check" id="btn-single-toggle" ...
+                                                    (change)="toggleCatalogState()">
+                                                <label class="btn btn-sm me-2 btn-outline-primary fw-bold small"
+                                                    for="btn-single-toggle">
+                                                    <i class="bi"
+                                                        [ngClass]="catalogState === 'Staged' ? 'bi-archive' : 'bi-globe'"></i>
+                                                    {{ catalogState }}
+                                                </label>
+                                                <button class="btn btn-sm btn-primary me-2 fw-bold small"
+                                                    [disabled]="!htmlPreview" (click)="downloadHtml()">
+                                                    <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .Html
                                                 </button>
 
-                                                <button class="btn btn-success fw-bold" (click)="downloadManualImpex()">
-                                                    <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .impex
-                                                    File
+                                                <button class="btn btn-sm btn-success fw-bold small"
+                                                    (click)="downloadManualImpex()">
+                                                    <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .ImpEx
                                                 </button>
                                             </div>
                                         </div>
@@ -215,8 +223,7 @@
                             <div *ngFor="let lang of languages" class="card p-3 mb-3 border-secondary-subtle bg-light">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <span class="badge bg-secondary text-uppercase py-2 px-3 fs-7">Language Variant: {{
-                                        lang
-                                        }}</span>
+                                        lang }}</span>
                                     <button *ngIf="lang === 'EN'" (click)="autoPopulateTranslations()"
                                         class="btn btn-sm btn-primary fw-bold">
                                         <i class="bi bi-translate me-1"></i>Auto-Translate to All Target Languages
@@ -236,22 +243,35 @@
 
                                     <div>
                                         <button class="btn btn-primary btn-sm fw-bold" (click)="generateSingleImpex()">
-                                            <i class="bi bi-stars me-2"></i>Generate & Review
+                                            <i class="bi bi-stars me-2"></i>Generate ImpEx
                                         </button>
 
                                     </div>
 
                                     <div class="d-flex gap-2">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="btn-group" role="group">
+                                                <input [disabled]="!outputResult" type="checkbox" class="btn-check"
+                                                    id="btn-bulk-toggle" ... (change)="toggleCatalogState()">
+                                                <label class="btn btn-sm btn-outline-primary fw-bold"
+                                                    for="btn-bulk-toggle">
+                                                    <i class="bi"
+                                                        [ngClass]="catalogState === 'Staged' ? 'bi-archive' : 'bi-globe'"></i>
+                                                    {{ catalogState }}
+                                                </label>
+                                            </div>
+                                        </div>
                                         <button [disabled]="!outputResult" class="btn btn-sm btn-outline-dark fw-bold"
                                             (click)="copyToClipboard()">
-                                            <i class="bi bi-copy me-2"></i>Copy impex
+                                            <i class="bi bi-copy me-2"></i>Copy
                                         </button>
                                         <button [disabled]="!outputResult" class="btn btn-sm btn-success fw-bold"
                                             (click)="downloadImpexFile()">
-                                            <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .impex File
+                                            <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .ImpEx
                                         </button>
-                                        <button class="btn btn-primary btn-sm fw-bold" (click)="downloadHtml()">
-                                            Download HTML File
+                                        <button [disabled]="!outputResult" class="btn btn-primary btn-sm fw-bold"
+                                            (click)="downloadHtml()">
+                                            <i class="bi bi-file-earmark-arrow-down me-2"></i>Download .Html
                                         </button>
                                     </div>
 
