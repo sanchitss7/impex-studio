@@ -66,7 +66,8 @@ export class ImpexWorkspaceComponent {
   isImpExValid: boolean = false;
   lastGeneratedFileLog: string = 'No files generated yet';
   progressPercentage: number = 0;
-  catalogState: 'Staged' | 'Online' = 'Staged';
+  catalogStateSingle: 'Staged' | 'Online' = 'Staged';
+  catalogStateBulk: 'Staged' | 'Online' = 'Staged';
   toasts: { message: string, type: 'success' | 'danger' }[] = [];
 
   constructor(private apiService: ImpexApiService, private cdr: ChangeDetectorRef, private http: HttpClient, private zone: NgZone) { }
@@ -163,22 +164,27 @@ export class ImpexWorkspaceComponent {
     }, 3000);
   }
 
+  toggleCatalogState(mode: 'single' | 'bulk') {
+    const isStaged = (mode === 'single' ? this.catalogStateSingle : this.catalogStateBulk) === 'Staged';
+    const newState = isStaged ? 'Online' : 'Staged';
+    const oldState = isStaged ? 'Staged' : 'Online';
 
-  toggleCatalogState() {
-    const previousState = this.catalogState;
-    this.catalogState = (previousState === 'Staged') ? 'Online' : 'Staged';
+    // Apply state change
+    if (mode === 'single') this.catalogStateSingle = newState;
+    else this.catalogStateBulk = newState;
 
-    // Use a global regex to replace ALL instances in the ImpEx content
-    const regex = new RegExp(previousState, 'g');
+    // Optimized Regex replacement
+    const regex = new RegExp(oldState, 'g');
 
-    if (this.activeWorkspaceMode === 'single') {
-      this.outputResult = this.outputResult.replace(regex, this.catalogState);
-    } else {
-      this.manualImpexContent = this.manualImpexContent.replace(regex, this.catalogState);
+    if (mode === 'single' && this.outputResult) {
+      this.outputResult = this.outputResult.replace(regex, newState);
+    } else if (mode === 'bulk' && this.manualImpexContent) {
+      this.manualImpexContent = this.manualImpexContent.replace(regex, newState);
     }
 
     this.cdr.detectChanges();
   }
+
 
   private decodeHtmlEntities(str: string): string {
     if (!str) return '';
