@@ -23,7 +23,7 @@ const buildUnifiedImpex = ({ headerConfig, uid, contentMap, selectedLanguage = '
         '', // Empty string adds the required trailing newline
         '\n', // Empty string adds the required trailing newline
     ].join('\n');
-    const macros = macrosTemplate.replace(/{{STATE}}/g, catalogState);
+    // const macros = macrosTemplate.replace(/{{STATE}}/g, catalogState);
     const formatContent = (str, lang) => {
         let val = (typeof str === 'object' && str !== null) ? (str.content || JSON.stringify(str)) : String(str || "");
 
