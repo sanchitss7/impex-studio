@@ -1,70 +1,51 @@
 /**
  * Unified ImpEx Builder
  */
-const buildUnifiedImpex = ({ headerConfig, uid, contentMap, selectedLanguage = 'en', catalogState = 'Staged' }) => {
+const buildUnifiedImpex = ({ headerConfig, uid, contentMap, selectedLanguage = 'en' }) => {
 
-    // Standard SAP Language Mapping
     const sapLangMap = {
-        'en': 'en',
-        'fr': 'fr_FR',
-        'de': 'de_DE',
-        'es': 'es_ES',
-        'it': 'it_IT',
-        'ja': 'ja_JA',
-        'ko': 'ko_KO'
+        'en': 'en', 'fr': 'fr_FR', 'de': 'de_DE',
+        'es': 'es_ES', 'it': 'it_IT', 'ja': 'ja_JA', 'ko': 'ko_KO'
     };
 
-    // SAP Macros
     const macros = [
         '$contentCatalog=omegaengineeringContentCatalog',
         '$productCatalog=omegaengineeringProductCatalog',
         '$contentCV=catalogVersion(CatalogVersion.catalog(Catalog.id[default=$contentCatalog]),CatalogVersion.version[default=Staged])[default=$contentCatalog:Staged]',
         '$productCV=catalogVersion(catalog(id[default=$productCatalog]),version[default=\'Staged\'])[unique=true,default=$productCatalog:Staged]',
-        '', // Empty string adds the required trailing newline
-        '\n', // Empty string adds the required trailing newline
+        '',
+        '\n'
     ].join('\n');
-    // const macros = macrosTemplate.replace(/{{STATE}}/g, catalogState);
-    const formatContent = (str, lang) => {
-        let val = (typeof str === 'object' && str !== null) ? (str.content || JSON.stringify(str)) : String(str || "");
 
-        val = val.replace(/Translated1: /gi, '');
-        let decoded = decodeHtmlEntities(val);
-        let cleaned = sanitizeContent(decoded);
-
-        // FRENCH-ONLY CLEANUP: Remove &nbsp; and Unicode spaces entirely
-        if (lang && lang.toLowerCase().includes('fr')) {
-            cleaned = cleaned.replace(/(&nbsp;|\u00A0)/gi, '');
-        }
-
-        let normalized = cleaned.replace(/""/g, '"');
-        return normalized.replace(/"/g, '""');
-    };
-
-    // 1. Normalize input to a flat array
     const items = Array.isArray(contentMap) ? contentMap : Object.keys(contentMap).map(key => ({
         lang: key,
         content: contentMap[key],
         uid: uid
     }));
 
-    // 2. Group by resolved language
     const grouped = items.reduce((acc, item) => {
         const langKey = String(item.lang || 'en').toLowerCase();
         const resolvedLang = sapLangMap[langKey] || langKey;
 
-        if (!acc[resolvedLang]) acc[resolvedLang] = [];
+        if (!acc[resolvedLang]) {
+            acc[resolvedLang] = [];
+        }
 
         acc[resolvedLang].push({
             uid: item.uid || uid,
             content: formatContent(item.content, resolvedLang)
         });
+
         return acc;
     }, {});
 
-    // 3. Build blocks: Header once per language, followed by all components in that group
     const blocks = Object.keys(grouped).map(lang => {
-        const header = `INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=${lang}]`;
+        // Updated header config with catalog version and path-delimiter
+        const header = `UPDATE CMSParagraphComponent;$contentCV[unique=true] ; uid[unique=true]; content[path-delimiter=!][lang=${lang}]`;
+        
+        // Binds the clean, escaped content in a single pair of outer double quotes
         const rows = grouped[lang].map(item => `;${item.uid};"${item.content}"`).join('\n');
+
         return `${header}\n${rows}`;
     }).join('\n\n');
 
@@ -79,10 +60,14 @@ const sanitizeContent = (str) => {
     if (!str) return '';
     let val = String(str);
 
-    // 1. Aggressive cleaning of artifacts
-    val = val.replace(/&nbsp;/gi, '').replace(/\u00A0/g, '').replace(/;/g, '').replace(/"\s*"/g, '"').replace(/""+/g, '"');
+    // 1. COLLAPSE WHITESPACE
+    val = val.replace(/\s+/g, ' ');
 
-    // 2. Character normalization
+    // 2. BASELINE FLATTENING: Collapse all existing double-double quotes to standard single quotes
+    val = val.replace(/""/g, '"');
+
+    // 3. Aggressive cleaning & character normalization
+    val = val.replace(/&nbsp;/gi, '').replace(/\u00A0/g, '').replace(/;/g, '');
     val = val.replace(/\0/g, '')
         .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
         .replace(/[\u2019\u2018\u201A\u201B]/g, "'")
@@ -99,30 +84,36 @@ const sanitizeContent = (str) => {
         .replace(/[\u2039]/g, '<')
         .replace(/[\u203A]/g, '>');
 
-    // 3. Tag and Attribute Normalization
+    // 4. Tag and Attribute Key Normalization to Lowercase
     return val.replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (match, slash, tagName, attrPart) => {
         const tag = tagName.toLowerCase();
-
-        // Return closing tags
         if (slash) return `</${tag}>`;
-
-        // Handle self-closing tags
-        const selfClosingTags = ['img', 'br', 'hr', 'input', 'meta', 'link'];
-        const isSelfClosing = selfClosingTags.includes(tag) || attrPart.trim().endsWith('/');
-
-        if (!attrPart || !attrPart.trim()) return `<${tag}${isSelfClosing ? ' />' : '>'}`;
+        if (!attrPart || !attrPart.trim()) return `<${tag}>`;
 
         const attrRegex = /([a-zA-Z0-9-_]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
-        const attrs = [];
-        let attrMatch;
-        while ((attrMatch = attrRegex.exec(attrPart)) !== null) {
-            const key = attrMatch[1].toLowerCase();
-            const value = (attrMatch[2] || attrMatch[3] || attrMatch[4] || "").replace(/^["']|["']$/g, '');
-            attrs.push(`${key}="${value}"`);
-        }
+        
+        let newAttrs = attrPart.replace(attrRegex, (fullMatch, key, val1, val2, val3) => {
+            const attrKey = key.toLowerCase();
+            const attrVal = val1 || val2 || val3 || "";
+            return `${attrKey}="${attrVal}"`;
+        });
 
-        return `<${tag}${attrs.length > 0 ? ' ' + attrs.join(' ') : ''}${isSelfClosing ? ' />' : '>'}`;
+        return `<${tag}${newAttrs}>`;
     });
+};
+
+const formatContent = (str) => {
+    // 1. Sanitize the HTML
+    let val = sanitizeContent(str).trim();
+    
+    // 2. Remove all existing leading/trailing quotes so we have a clean slate
+    val = val.replace(/^["\s]+|["\s]+$/g, '');
+    
+    // 3. Escape internal quotes (" -> "")
+    val = val.replace(/"/g, '""');
+    
+    // 4. Return without adding outer quotes (the buildUnifiedImpex function handles the wrapper)
+    return val;
 };
 
 module.exports = { buildUnifiedImpex, sanitizeContent };

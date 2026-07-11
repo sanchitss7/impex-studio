@@ -96,7 +96,7 @@ app.post('/api/generate-impex', (req, res) => {
 
         // Build blocks with defensive checks
         const blocks = Object.keys(groupedByLang).map(lang => {
-            const header = `INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content[lang=${lang}]\n`;
+            const header = `UPDATE CMSParagraphComponent;$contentCV[unique=true] ; uid[unique=true]; content[path-delimiter=!][lang=${lang}]\n`;
 
             // Defensively map rows
             const rowStrings = groupedByLang[lang].map(item => {

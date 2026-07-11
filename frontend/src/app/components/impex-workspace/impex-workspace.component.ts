@@ -26,10 +26,11 @@ interface BannerRow {
   styleUrls: ['./impex-workspace.component.css']
 })
 export class ImpexWorkspaceComponent {
+  isWrapped: boolean = true;
   impexData: string = '';
   htmlPreview: string = '';
   showScrollButton: boolean = false;
-  headerConfig: string = 'INSERT_UPDATE CMSParagraphComponent;uid[unique=true];content2[lang=$lang]';
+  headerConfig: string = 'UPDATE CMSParagraphComponent;$contentCV[unique=true] ; uid[unique=true]; content[path-delimiter=!][lang=$lang]';
   uid: string = 'HomepageWelcomeParagraph';
   outputResult: string = '';
   private deepLMap: Record<string, string> = {
@@ -44,34 +45,44 @@ export class ImpexWorkspaceComponent {
 
   languages: string[] = ['EN', 'DE', 'ES', 'FR', 'IT', 'JA', 'KO'];
   contentMap: { [key: string]: string } = {
-    EN: '<DIV CLASS="hero">Welcome "6-1100394-1"</DIV>',
-    DE: '',
-    ES: '',
-    FR: '',
+    EN: '<img src=""https://assets.omega.com/micable/icon-coins.png"" width="""" height="""" class=""feature-icon"" />',
+    DE: '"<img src=""https://assets.omega.com/micable/icon-coins.png"" width="""" height="""" class=""feature-icon"" />"',
+    ES: '"<img src="https://assets.omega.com/micable/icon-coins.png" width="" height="" class="feature-icon" />"',
+    FR: '<img src="https://assets.omega.com/micable/icon-coins.png" width="" height="" class="feature-icon" />',
     IT: '',
     JA: '',
     KO: '',
   };
   isDragging: boolean = false;
-  activeWorkspaceMode: 'single' | 'bulk' = 'bulk';
+  activeWorkspaceMode: 'single' | 'bulk' = 'single';
   selectedLanguage: string = 'DE';
   languagesList: string[] = ['DE', 'ES', 'FR', 'IT', 'JA', 'KO'];
   bannerGridData: BannerRow[] = [];
   masterCheckboxState: boolean = true;
   backendConnectionStatus: string = 'Connected to Backend: http://localhost:3000';
-  isLoading: boolean = false;
+  isBulkLoading: boolean = false;
+  isSingleLoading: boolean = false;
+
+  bulkProgress: number = 0;
+  singleProgress: number = 0;
   showModal: boolean = false;
   manualImpexContent: string = '';
   // validationErrors: { message: string, line: number, char: number }[] = [];
   isImpExValid: boolean = false;
   lastGeneratedFileLog: string = 'No files generated yet';
-  progressPercentage: number = 0;
   catalogStateSingle: 'Staged' | 'Online' = 'Staged';
   catalogStateBulk: 'Staged' | 'Online' = 'Staged';
   toasts: { message: string, type: 'success' | 'danger' }[] = [];
 
   constructor(private apiService: ImpexApiService, private cdr: ChangeDetectorRef, private http: HttpClient, private zone: NgZone) { }
 
+  onWrapToggle() {
+    // This will be called immediately by the checkbox
+    console.log("Wrapping is now:", this.isWrapped);
+
+    // Explicitly run change detection to refresh the DOM
+    this.cdr.detectChanges();
+  }
 
   openPreviewModal() {
     if (this.manualImpexContent) {
@@ -81,11 +92,24 @@ export class ImpexWorkspaceComponent {
       alert("No content generated yet. Please click 'Generate ImpEx' first.");
     }
   }
+  private updateBulkProgress(current: number, total: number) {
+    this.bulkProgress = Math.round((current / total) * 100);
+    this.cdr.detectChanges();
+  }
+
+  private applyIdFormat(translated: string, original: string): string {
+    const idRegex = /["'«»“”„‟"' ]\d+-\d+-\d+["'«»“”„‟"' ]/g;
+    const match = original.match(idRegex);
+    if (!match) return translated;
+
+    const cleanId = match[0].replace(/[^\d-]/g, '');
+    return translated.replace('###ID###', ` "${cleanId}"`);
+  }
 
   // 2. Refactored Generate method (no longer forces showModal = true)
   async generateAndOpenModal() {
-    this.isLoading = true;
-    this.progressPercentage = 0;
+    this.isBulkLoading = true;
+    this.bulkProgress = 0;
     this.cdr.detectChanges();
 
     try {
@@ -93,14 +117,14 @@ export class ImpexWorkspaceComponent {
       let completedItems = 0;
 
       const processedRows = await Promise.all(this.bannerGridData.map(async (row) => {
+        // 1. Skip already translated rows
         if (row.isTranslated && row.content) {
           completedItems++;
-          this.progressPercentage = Math.round((completedItems / totalItems) * 100);
+          this.updateBulkProgress(completedItems, totalItems);
           return row;
         }
 
-        const idRegex = /["'«»“”„‟"' ]\d+-\d+-\d+["'«»“”„‟"' ]/g;
-        const match = (row.originalContent || row.content).match(idRegex);
+        // 2. Perform Translation
         const res: any = await firstValueFrom(
           this.http.post('http://localhost:3000/api/translate', {
             text: row.content,
@@ -108,19 +132,17 @@ export class ImpexWorkspaceComponent {
           })
         );
 
+        // 3. Update Progress and Apply Format
         completedItems++;
-        this.progressPercentage = Math.round((completedItems / totalItems) * 100);
-        this.cdr.detectChanges();
+        this.updateBulkProgress(completedItems, totalItems);
 
-        let translated = res.translatedText;
-        const cleanId = match?.[0]?.replace(/[^\d-]/g, '') || '';
-        const finalContent = match ? translated.replace('###ID###', ' "' + cleanId + '"') : translated;
-
+        const finalContent = this.applyIdFormat(res.translatedText, row.originalContent || row.content);
         return { ...row, content: finalContent, isTranslated: true };
       }));
 
       this.bannerGridData = processedRows;
 
+      // 4. Generate ImpEx
       const payload = {
         uid: this.uid,
         headerConfig: this.headerConfig,
@@ -136,18 +158,14 @@ export class ImpexWorkspaceComponent {
         this.http.post('http://localhost:3000/api/generate-impex', payload)
       );
 
-      this.manualImpexContent = response.impexData;
+      this.manualImpexContent = this.impexData = response.impexData;
       this.htmlPreview = response.htmlContent;
-      this.impexData = response.impexData;
 
-      // Notification for the user
-      console.log("Generation complete. Click 'Review Translations' to edit.");
-      this.cdr.detectChanges();
       this.showToast("Translation complete and ImpEx generated.", "success");
     } catch (err) {
       this.showToast("Generation failed.", "danger");
     } finally {
-      this.isLoading = false;
+      this.isBulkLoading = false;
       this.cdr.detectChanges();
     }
   }
@@ -287,29 +305,20 @@ export class ImpexWorkspaceComponent {
   }
 
   async generateSingleImpex() {
-    // 1. Create a clean map
-    const cleanContentMap: { [key: string]: string } = {};
-
-    Object.keys(this.contentMap).forEach(lang => {
-      const rawContent = this.contentMap[lang] || "";
-      cleanContentMap[lang] = this.sanitizeContent(this.contentMap[lang] || "");
-    });
-
-
-    // 2. Pass the clean map using the correct service variable
+    // 1. Send the RAW content map directly
     const payload = {
       uid: this.uid,
-      contentMap: cleanContentMap,
+      contentMap: this.contentMap, // Send the raw, untouched map
       headerConfig: this.headerConfig,
       selectedLanguage: 'EN'
     };
 
-    // Use 'this.apiService' (as defined in your constructor)
+    // 2. Call the service
     this.apiService.buildUnifiedImpex(payload).subscribe({
       next: (res: any) => {
         this.impexData = res.impexData;
-        this.outputResult = res.impexData; // Sync for the <pre> block
-        this.htmlPreview = res.htmlContent || ''; // Store the HTML
+        this.outputResult = res.impexData;
+        this.htmlPreview = res.htmlContent || '';
         this.cdr.detectChanges();
         this.showToast("ImpEx generated successfully.", "success");
       }
@@ -383,7 +392,7 @@ export class ImpexWorkspaceComponent {
       .replace(/\0/g, '')
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
       .replace(/[\u2019\u2018\u201A\u201B]/g, "'")
-      .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+      .replace(/[\u2010-\u2015]/g, '-')
       .replace(/[\u00A1]/g, '!')
       .replace(/[\u00B0]/g, '°')
       .replace(/[\u00A0]/g, ' ')
@@ -400,30 +409,21 @@ export class ImpexWorkspaceComponent {
     // 2. Sanitize HTML Tags and Attributes
     val = val.replace(/<(\/?)([a-zA-Z0-9]+)([^>]*)>/g, (match, slash, tagName, attrPart) => {
       const tag = tagName.toLowerCase();
-
-      // Handle closing tags
       if (slash) return `</${tag}>`;
-
-      // Handle opening tags
       if (!attrPart || !attrPart.trim()) return `<${tag}>`;
 
-      // Normalize attributes: key="value"
       const attrRegex = /([a-zA-Z0-9-_]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
       const attrs = [];
       let attrMatch;
-
       while ((attrMatch = attrRegex.exec(attrPart)) !== null) {
         const key = attrMatch[1].toLowerCase();
-        // Get the value, strip any existing surrounding quotes
-        const value = (attrMatch[2] || attrMatch[3] || attrMatch[4] || "").replace(/^["']|["']$/g, '');
+        let value = (attrMatch[2] || attrMatch[3] || attrMatch[4] || "").replace(/"/g, '&quot;');
         attrs.push(`${key}="${value}"`);
       }
-
       return `<${tag}${attrs.length > 0 ? ' ' + attrs.join(' ') : ''}>`;
     });
 
-    val = val.replace(/"/g, '""');
-
+    // return val.replace(/"/g, '""');
     return val;
   }
   get contentMapKeys() { return Object.keys(this.contentMap); }
@@ -435,52 +435,62 @@ export class ImpexWorkspaceComponent {
   //   this.contentMap = { en: '', de: '', es: '', fr: '', it: '', ja: '', ko: '' };
   // }
 
-  autoPopulateTranslations() {
+  async autoPopulateTranslations() {
     const englishSource = this.contentMap['EN'];
     if (!englishSource) {
-      alert('Please provide English base content in the "en" field first!');
+      this.showToast('Please provide English base content in the "EN" field first!', 'success');
       return;
     }
 
-    // Filter languages to translate (exclude 'EN')
+    // 1. Initialize Loader
+    this.isSingleLoading = true;
+    this.singleProgress = 0;
+    this.cdr.detectChanges();
+
     const targetLangs = this.languages.filter(lang => lang !== 'EN');
     let completedCount = 0;
     let hasError = false;
 
-    targetLangs.forEach(lang => {
-      this.apiService.autoTranslate(englishSource, lang).subscribe({
-        next: (res: any) => {
+    try {
+      // 2. Process translations sequentially (or use Promise.all for parallel)
+      for (const lang of targetLangs) {
+        try {
+          // Using firstValueFrom to turn the Observable into a Promise
+          const res: any = await firstValueFrom(this.apiService.autoTranslate(englishSource, lang));
+
           if (res && res.translatedText) {
             this.contentMap = {
               ...this.contentMap,
               [lang]: res.translatedText
             };
-            this.cdr.detectChanges();
           }
-
-          completedCount++;
-          // Check if this was the last language
-          if (completedCount === targetLangs.length) {
-            if (!hasError) {
-              this.showToast("All languages translated successfully!", "success");
-            } else {
-              this.showToast("Some translations failed. Please check console.", "danger");
-            }
-          }
-        },
-
-        error: (err) => {
+        } catch (err) {
           console.error(`Translation failed for ${lang}:`, err);
           hasError = true;
-          completedCount++;
-
-          // Even on error, check if this was the final request to trigger the toast
-          if (completedCount === targetLangs.length) {
-            this.showToast("Some translations failed. Please check console.", "danger");
-          }
         }
-      });
-    });
+
+        // 3. Update Progress Bar
+        completedCount++;
+        this.singleProgress = Math.round((completedCount / targetLangs.length) * 100);
+        this.cdr.detectChanges();
+        this.scrollToTop();
+      }
+
+      // 4. Final Notification
+      if (!hasError) {
+        this.showToast("All languages translated successfully!", "success");
+      } else {
+        this.showToast("Some translations failed. Please check console.", "danger");
+      }
+
+    } catch (err) {
+      console.error("General translation error:", err);
+      this.showToast("An unexpected error occurred during translation.", "danger");
+    } finally {
+      // 5. Hide Loader
+      this.isSingleLoading = false;
+      this.cdr.detectChanges();
+    }
   }
 
   processImpex() {
@@ -488,17 +498,19 @@ export class ImpexWorkspaceComponent {
 
     Object.keys(this.contentMap).forEach(lang => {
       let text = this.contentMap[lang] || "";
+      console.log(`DEBUG: Sending to Server for ${lang}:`, text);
 
-      // 1. Strip existing quote messes around ID
+      // 1. Just clean the text artifacts, do NOT add manual quotes here
       text = text.replace(/[«»“”„‟" ]*###ID###[«»“”„‟" ]*/g, '###ID###');
       const idMatch = text.match(/\d+-\d+-\d+/);
       const cleanId = idMatch ? idMatch[0] : '';
 
-      // 2. Inject ID as ""ID""
-      text = text.replace('###ID###', '"' + cleanId + '"');
+      // Inject the ID without pre-wrapping it in quotes 
+      // (Let the server-side service handle the ImpEx wrapping)
+      text = text.replace('###ID###', cleanId);
 
-      // 3. Sanitize (This now handles tag lowercasing AND quote escaping)
-      cleanContentMap[lang] = this.sanitizeContent(text);
+      // 2. Sanitize only (NO quoting logic in the component)
+      cleanContentMap[lang] = text;
     });
 
     const payload = {
@@ -561,6 +573,11 @@ export class ImpexWorkspaceComponent {
     a.click();
     window.URL.revokeObjectURL(url);
     this.showToast("HTML file downloaded successfully.", "success");
+  }
+
+  private isAlreadySanitized(str: string): boolean {
+    const impexQuoteRegex = /""(?=[^>]*<)/g;
+    return impexQuoteRegex.test(str);
   }
 
   // private triggerDownload(blob: Blob, filename: string) {

@@ -3,7 +3,7 @@
    ========================================================================== */
 .app-workspace-bg {
   background-color: #f4f6f9;
-  min-height: 100vh;
+  min-height: 100%;
   padding-bottom: 60px;
   /* Leaves clear breathing space above fixed status footer */
 }
@@ -62,10 +62,12 @@
    4. CODE COMPILER TERMINAL VIEWPORT SCREEN
    ========================================================================== */
 .terminal-viewport {
-  min-height: 91.5%;
+  min-height: 94.5%;
+  max-height: 94.5%;
   white-space: pre;
   word-wrap: break-word;
   overflow: auto;
+  padding-top: 30px !important;
 }
 
 /* Ensure the modal background covers the screen */
@@ -86,6 +88,23 @@
 .editor-container {
   position: relative;
   height: 350px;
+}
+
+.mb-3.wrap-box {
+  position: absolute;
+  margin-top: 2px;
+  z-index: 1;
+  margin-left: 2px;
+  background: #212529;
+  font-size: 12px;
+  padding: 7px 9px 4px 9px;
+  color: #ffffff;
+}
+
+.mb-3.wrap-box label {
+  margin-left: 4px;
+  position: relative;
+  top: -2px;
 }
 
 .manualImpexContent {
@@ -274,11 +293,11 @@ small.badge.bg-primary.rounded-pill.ms-2 {
 }
 
 .progressCount {
-    position: absolute;
-    right: 30px;
-    top: 23px;
-    font-size: 42px;
-    font-weight: 700;
-    font-family: monospace;
-    color: #d8d8d8;
+  position: absolute;
+  right: 30px;
+  top: 23px;
+  font-size: 42px;
+  font-weight: 700;
+  font-family: monospace;
+  color: #d8d8d8;
 }

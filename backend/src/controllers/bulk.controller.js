@@ -16,7 +16,7 @@ exports.parseBulkUpload = async (req, res) => {
         const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-        
+
         // Convert sheet to JSON array
         const rawRows = XLSX.utils.sheet_to_json(worksheet);
 
@@ -31,17 +31,15 @@ exports.parseBulkUpload = async (req, res) => {
                 return acc;
             }, {});
 
-            // Extract values
             const rawComponentId = normalizedRow['component_id'];
             const rawContent = normalizedRow['content'] || "";
 
-            // SANITIZE HERE: Apply your helper to each cell's content
-            const cleanedContent = sanitizeContent(String(rawContent).trim());
-
+            // CHANGE: DO NOT call sanitizeContent here.
+            // Pass the raw content to the frontend so it stays pristine.
             return {
                 selected: true,
                 component_Id: rawComponentId !== undefined ? String(rawComponentId).trim() : `UNASSIGNED_ID_${index + 1}`,
-                content: cleanedContent 
+                content: String(rawContent).trim()
             };
         });
 
